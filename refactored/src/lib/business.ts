@@ -1,8 +1,13 @@
-// Edit these to match your business.
+// مشخصات کسب‌و‌کار را اینجا ویرایش کنید.
 export const BUSINESS = {
-  name: "VoxelForge",
-  cardNumber: "6037-XXXX-XXXX-XXXX",
-  cardHolder: "Your Name",
-  bankName: "Bank Melli",
-  whatsapp: "+98 9XX XXX XXXX",
+  name: "وُکسِل‌فورج",
+  nameEn: "VoxelForge",
+  // شماره کارت ۱۶ رقمی بانک
+  cardNumber: "6037-9911-2233-4455",
+  cardHolder: "نام و نام خانوادگی شما",
+  bankName: "بانک ملی ایران",
+  sheba: "IR12-3456-7890-1234-5678-9012-34",
+  whatsapp: "+98 912 000 0000",
+  phone: "۰۲۱-۸۸۰۰۰۰۰۰",
+  address: "تهران، ایران",
 };

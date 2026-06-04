@@ -1,18 +1,18 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { Upload, FileBox, Loader2, Check, ArrowRight, AlertCircle } from "lucide-react";
+import { Upload, FileBox, Loader2, Check, ArrowLeft, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { useAuth } from "@/hooks/use-auth";
-import { parseStl, estimateWeight, calcCost, formatToman, MATERIAL_DENSITY, type StlStats } from "@/lib/stl-parser";
+import { parseStl, estimateWeight, calcCost, formatToman, formatNumberFa, MATERIAL_DENSITY, type StlStats } from "@/lib/stl-parser";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/quote")({
   head: () => ({
     meta: [
-      { title: "Get an Instant Quote — VoxelForge" },
-      { name: "description", content: "Upload an STL file and get an instant 3D printing quote." },
+      { title: "دریافت قیمت آنی — وُکسِل‌فورج" },
+      { name: "description", content: "فایل STL را آپلود کنید و قیمت چاپ سه‌بعدی را آنی ببینید." },
     ],
   }),
   component: QuotePage,
@@ -39,21 +39,21 @@ function QuotePage() {
     setError(null);
     setStats(null);
     if (!f.name.toLowerCase().endsWith(".stl")) {
-      setError("Only .stl files are supported."); return;
+      setError("فقط فایل .stl پشتیبانی می‌شود."); return;
     }
     if (f.size > 50 * 1024 * 1024) {
-      setError("File too large (max 50 MB)."); return;
+      setError("حجم فایل بیش از حد است (حداکثر ۵۰ مگابایت)."); return;
     }
     setFile(f);
     setParsing(true);
     try {
       const s = await parseStl(f);
       if (s.volumeCm3 <= 0) {
-        setError("Couldn't compute a valid volume. Is your mesh closed?"); return;
+        setError("نتوانستیم حجم معتبر را محاسبه کنیم. آیا مش بسته است؟"); return;
       }
       setStats(s);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to parse STL");
+      setError(err instanceof Error ? err.message : "خطا در پردازش STL");
     } finally {
       setParsing(false);
     }
@@ -82,10 +82,10 @@ function QuotePage() {
         }).select("id").single();
       if (insErr) throw insErr;
 
-      toast.success("Order created. Now upload your payment receipt.");
+      toast.success("سفارش ثبت شد. حالا رسید پرداخت را آپلود کنید.");
       navigate({ to: "/orders", search: { highlight: order.id } as never });
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Failed to create order");
+      toast.error(err instanceof Error ? err.message : "ثبت سفارش ناموفق بود");
     } finally {
       setSubmitting(false);
     }
@@ -96,9 +96,9 @@ function QuotePage() {
       <Navbar />
       <main className="flex-1 max-w-6xl mx-auto px-6 py-12 w-full">
         <div className="mb-10">
-          <div className="text-xs uppercase tracking-widest text-primary font-mono mb-2">Step 1 of 2</div>
-          <h1 className="text-4xl font-bold tracking-tight">Get your instant quote</h1>
-          <p className="text-muted-foreground mt-2">Upload your STL — slicing happens in your browser, no signup needed to see the price.</p>
+          <div className="text-xs uppercase tracking-widest text-primary font-mono mb-2">گام ۱ از ۲</div>
+          <h1 className="text-4xl font-bold tracking-tight">قیمت آنی خود را دریافت کنید</h1>
+          <p className="text-muted-foreground mt-2">فایل STL را آپلود کنید — اسلایس در مرورگر شما انجام می‌شود، برای دیدن قیمت ثبت‌نام لازم نیست.</p>
         </div>
 
         <div className="grid lg:grid-cols-[1.2fr_1fr] gap-6">
@@ -113,7 +113,7 @@ function QuotePage() {
 
             <div className="surface rounded-2xl p-6 space-y-5">
               <div>
-                <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Material</label>
+                <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">جنس متریال</label>
                 <div className="mt-2 grid grid-cols-5 gap-2">
                   {(Object.keys(MATERIAL_DENSITY) as Array<keyof typeof MATERIAL_DENSITY>).map((m) => (
                     <button key={m} onClick={() => setMaterial(m)}
@@ -125,8 +125,8 @@ function QuotePage() {
               </div>
               <div>
                 <div className="flex items-baseline justify-between">
-                  <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Infill</label>
-                  <span className="font-mono text-sm">{infill}%</span>
+                  <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">درصد اینفیل</label>
+                  <span className="font-mono text-sm">{formatNumberFa(infill)}٪</span>
                 </div>
                 <input
                   type="range" min={10} max={100} step={5} value={infill}
@@ -134,14 +134,14 @@ function QuotePage() {
                   className="w-full mt-3 accent-[oklch(0.86_0.16_195)]"
                 />
                 <div className="flex justify-between text-[10px] text-muted-foreground font-mono mt-1">
-                  <span>Light · cheaper</span><span>Solid · strongest</span>
+                  <span>سبک · ارزان‌تر</span><span>توپر · مقاوم‌تر</span>
                 </div>
               </div>
               <div>
-                <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Notes (optional)</label>
+                <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">توضیحات (اختیاری)</label>
                 <textarea
                   value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} maxLength={500}
-                  placeholder="Color preferences, deadline, post-processing requests…"
+                  placeholder="رنگ مورد نظر، مهلت تحویل، درخواست پس‌پردازش…"
                   className="mt-2 w-full rounded-lg border border-border bg-input px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/30 resize-none"
                 />
               </div>
@@ -151,21 +151,21 @@ function QuotePage() {
           {/* Quote summary */}
           <div className="lg:sticky lg:top-24 self-start">
             <div className="surface rounded-2xl p-7">
-              <div className="text-xs uppercase tracking-widest text-accent font-mono mb-2">Live quote</div>
+              <div className="text-xs uppercase tracking-widest text-accent font-mono mb-2">قیمت زنده</div>
               <div className="text-4xl font-bold tracking-tight">
                 {stats ? formatToman(cost) : "—"}
               </div>
               <div className="text-sm text-muted-foreground mt-1">
-                {stats ? `${weight.toFixed(1)} g × 30,000 Toman/g` : "Upload an STL to see your price"}
+                {stats ? `${formatNumberFa(weight, 1)} گرم × ۳۰٬۰۰۰ تومان` : "برای دیدن قیمت یک فایل STL آپلود کنید"}
               </div>
 
               <div className="mt-6 space-y-3 text-sm">
-                <Row label="Triangles" value={stats?.triangles.toLocaleString() ?? "—"} mono />
-                <Row label="Volume" value={stats ? `${stats.volumeCm3.toFixed(2)} cm³` : "—"} mono />
-                <Row label="Bounding box" value={stats ? `${stats.bbox.x.toFixed(0)} × ${stats.bbox.y.toFixed(0)} × ${stats.bbox.z.toFixed(0)} mm` : "—"} mono />
-                <Row label="Material" value={`${material} (${MATERIAL_DENSITY[material]} g/cm³)`} />
-                <Row label="Infill" value={`${infill}%`} mono />
-                <Row label="Est. weight" value={stats ? `${weight.toFixed(1)} g` : "—"} mono />
+                <Row label="تعداد مثلث" value={stats ? formatNumberFa(stats.triangles) : "—"} mono />
+                <Row label="حجم" value={stats ? `${formatNumberFa(stats.volumeCm3, 2)} سانتی‌متر مکعب` : "—"} mono />
+                <Row label="ابعاد جعبه" value={stats ? `${formatNumberFa(stats.bbox.x)} × ${formatNumberFa(stats.bbox.y)} × ${formatNumberFa(stats.bbox.z)} میلی‌متر` : "—"} mono />
+                <Row label="متریال" value={`${material} (${MATERIAL_DENSITY[material]} g/cm³)`} />
+                <Row label="اینفیل" value={`${formatNumberFa(infill)}٪`} mono />
+                <Row label="وزن تخمینی" value={stats ? `${formatNumberFa(weight, 1)} گرم` : "—"} mono />
               </div>
 
               <button
@@ -173,11 +173,11 @@ function QuotePage() {
                 onClick={submitOrder}
                 className="mt-7 w-full rounded-lg btn-primary py-3 text-sm flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                {submitting ? <Loader2 className="size-4 animate-spin" /> : <ArrowRight className="size-4" />}
-                {user ? "Place order & pay" : "Sign in to place order"}
+                {submitting ? <Loader2 className="size-4 animate-spin" /> : <ArrowLeft className="size-4" />}
+                {user ? "ثبت سفارش و پرداخت" : "برای ثبت سفارش وارد شوید"}
               </button>
               <p className="text-[11px] text-muted-foreground mt-3 leading-relaxed">
-                Estimate based on geometry. Final weight may vary ±10% depending on supports & raft.
+                تخمین بر اساس هندسه است. وزن نهایی ممکن است ±۱۰٪ بسته به ساپورت و رفت تفاوت کند.
               </p>
             </div>
           </div>
@@ -218,12 +218,12 @@ function DropZone({ file, parsing, onFile }: { file: File | null; parsing: boole
       {file ? (
         <>
           <div className="font-semibold flex items-center justify-center gap-2"><FileBox className="size-4 text-primary" /> {file.name}</div>
-          <div className="text-xs text-muted-foreground mt-1">{(file.size / 1024 / 1024).toFixed(2)} MB · click to choose another</div>
+          <div className="text-xs text-muted-foreground mt-1">{formatNumberFa(file.size / 1024 / 1024, 2)} مگابایت · برای انتخاب فایل دیگر کلیک کنید</div>
         </>
       ) : (
         <>
-          <div className="font-semibold">Drop your STL here</div>
-          <div className="text-xs text-muted-foreground mt-1">or click to browse · max 50 MB</div>
+          <div className="font-semibold">فایل STL را اینجا رها کنید</div>
+          <div className="text-xs text-muted-foreground mt-1">یا برای انتخاب کلیک کنید · حداکثر ۵۰ مگابایت</div>
         </>
       )}
     </label>

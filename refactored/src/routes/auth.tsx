@@ -8,8 +8,8 @@ import { useAuth } from "@/hooks/use-auth";
 export const Route = createFileRoute("/auth")({
   head: () => ({
     meta: [
-      { title: "Sign in — VoxelForge" },
-      { name: "description", content: "Sign in or create an account to order 3D prints." },
+      { title: "ورود — وُکسِل‌فورج" },
+      { name: "description", content: "وارد حساب خود شوید یا ثبت‌نام کنید تا سفارش چاپ سه‌بعدی ثبت نمایید." },
     ],
   }),
   component: AuthPage,
@@ -42,15 +42,15 @@ function AuthPage() {
           },
         });
         if (error) throw error;
-        toast.success("Account created! You're signed in.");
+        toast.success("حساب شما ساخته شد! خوش آمدید.");
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        toast.success("Welcome back.");
+        toast.success("خوش برگشتید.");
       }
       navigate({ to: "/quote" });
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Authentication failed");
+      toast.error(err instanceof Error ? err.message : "ورود ناموفق بود");
     } finally {
       setSubmitting(false);
     }
@@ -63,32 +63,32 @@ function AuthPage() {
           <div className="size-10 rounded-lg btn-primary grid place-items-center">
             <Boxes className="size-5 text-primary-foreground" />
           </div>
-          <span className="font-bold text-xl tracking-tight">Voxel<span className="text-gradient">Forge</span></span>
+          <span className="font-bold text-xl tracking-tight">وُکسِل<span className="text-gradient">فورج</span></span>
         </Link>
 
         <div className="surface rounded-2xl p-8">
           <h1 className="text-2xl font-bold tracking-tight">
-            {mode === "signup" ? "Create your account" : "Welcome back"}
+            {mode === "signup" ? "ساخت حساب کاربری" : "خوش برگشتید"}
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {mode === "signup" ? "Start printing in minutes." : "Sign in to manage your orders."}
+            {mode === "signup" ? "در چند دقیقه چاپ را شروع کنید." : "برای مدیریت سفارش‌ها وارد شوید."}
           </p>
 
           <form onSubmit={handleSubmit} className="mt-6 space-y-4">
             {mode === "signup" && (
               <>
-                <Field label="Full name" value={fullName} onChange={setFullName} required />
-                <Field label="Phone" type="tel" value={phone} onChange={setPhone} required />
+                <Field label="نام و نام خانوادگی" value={fullName} onChange={setFullName} required />
+                <Field label="شماره تماس" type="tel" value={phone} onChange={setPhone} required />
               </>
             )}
-            <Field label="Email" type="email" value={email} onChange={setEmail} required />
-            <Field label="Password" type="password" value={password} onChange={setPassword} required minLength={6} />
+            <Field label="ایمیل" type="email" value={email} onChange={setEmail} required />
+            <Field label="رمز عبور" type="password" value={password} onChange={setPassword} required minLength={6} />
 
             <button
               type="submit" disabled={submitting}
               className="w-full rounded-lg btn-primary py-2.5 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {submitting ? "Please wait…" : mode === "signup" ? "Create account" : "Sign in"}
+              {submitting ? "لطفاً صبر کنید…" : mode === "signup" ? "ساخت حساب" : "ورود"}
             </button>
           </form>
 
@@ -96,7 +96,7 @@ function AuthPage() {
             onClick={() => setMode(mode === "signup" ? "signin" : "signup")}
             className="mt-4 w-full text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
-            {mode === "signup" ? "Already have an account? Sign in" : "Don't have an account? Sign up"}
+            {mode === "signup" ? "حساب کاربری دارید؟ وارد شوید" : "حساب کاربری ندارید؟ ثبت‌نام کنید"}
           </button>
         </div>
       </div>
@@ -114,6 +114,7 @@ function Field({ label, value, onChange, type = "text", required, minLength }: {
       <input
         type={type} value={value} onChange={(e) => onChange(e.target.value)}
         required={required} minLength={minLength}
+        dir={type === "email" || type === "password" ? "ltr" : "rtl"}
         className="mt-1.5 w-full rounded-lg border border-border bg-input px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/30 transition-all"
       />
     </label>

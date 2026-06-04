@@ -20,25 +20,25 @@ export function Navbar() {
             <Boxes className="size-5 text-primary-foreground" />
           </div>
           <span className="font-bold tracking-tight text-lg">
-            Voxel<span className="text-gradient">Forge</span>
+            وُکسِل<span className="text-gradient">فورج</span>
           </span>
         </Link>
 
         <nav className="hidden md:flex items-center gap-8 text-sm text-muted-foreground">
-          <Link to="/" className="hover:text-foreground transition-colors" activeOptions={{ exact: true }} activeProps={{ className: "text-foreground" }}>Home</Link>
-          <Link to="/quote" className="hover:text-foreground transition-colors" activeProps={{ className: "text-foreground" }}>Get a Quote</Link>
-          {user && <Link to="/orders" className="hover:text-foreground transition-colors" activeProps={{ className: "text-foreground" }}>My Orders</Link>}
-          {isAdmin && <Link to="/admin" className="hover:text-foreground transition-colors flex items-center gap-1.5" activeProps={{ className: "text-foreground" }}><Shield className="size-3.5" />Admin</Link>}
+          <Link to="/" className="hover:text-foreground transition-colors" activeOptions={{ exact: true }} activeProps={{ className: "text-foreground" }}>خانه</Link>
+          <Link to="/quote" className="hover:text-foreground transition-colors" activeProps={{ className: "text-foreground" }}>دریافت قیمت</Link>
+          {user && <Link to="/orders" className="hover:text-foreground transition-colors" activeProps={{ className: "text-foreground" }}>سفارش‌های من</Link>}
+          {isAdmin && <Link to="/admin" className="hover:text-foreground transition-colors flex items-center gap-1.5" activeProps={{ className: "text-foreground" }}><Shield className="size-3.5" />مدیریت</Link>}
         </nav>
 
         <div className="flex items-center gap-3">
           {user ? (
             <button onClick={signOut} className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1.5 transition-colors">
-              <LogOut className="size-4" /> Sign out
+              <LogOut className="size-4" /> خروج
             </button>
           ) : (
             <Link to="/auth" className="text-sm font-medium px-4 py-2 rounded-lg btn-primary">
-              Sign in
+              ورود
             </Link>
           )}
         </div>

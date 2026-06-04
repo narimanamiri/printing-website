@@ -137,5 +137,12 @@ export function calcCost(weightG: number): number {
 }
 
 export function formatToman(n: number): string {
-  return new Intl.NumberFormat("en-US").format(n) + " Toman";
+  return new Intl.NumberFormat("fa-IR").format(n) + " تومان";
+}
+
+export function formatNumberFa(n: number, digits = 0): string {
+  return new Intl.NumberFormat("fa-IR", {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  }).format(n);
 }
