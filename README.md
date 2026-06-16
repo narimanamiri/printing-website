@@ -50,8 +50,18 @@ npm run dev          # یا: npm run build && node dist/server/server.js
 
 ## ⚙️ پیکربندی کسب‌وکار
 
-شماره کارت، شبا و مشخصات تماس را در
-[`refactored/src/lib/business.ts`](./refactored/src/lib/business.ts) ویرایش کنید.
+قیمت هر گرم، حداقل سفارش، حجم چاپ و اطلاعات کارت بانکی را از **پنل ادمین** (`/settings`)
+تنظیم کنید — بدون نیاز به ویرایش کد. مقادیر اولیه در
+[`refactored/src/lib/business.ts`](./refactored/src/lib/business.ts).
+
+---
+
+## 📚 مستندات کامل
+
+- [README اصلی](./refactored/README.fa.md) — نمای کلی و شروع سریع
+- [راهنمای کاربر](./refactored/docs/USER-GUIDE.md) · [راهنمای مدیر](./refactored/docs/ADMIN-GUIDE.md)
+- [موتور اسلایس](./refactored/docs/SLICER.md) · [معماری](./refactored/docs/ARCHITECTURE.md)
+- [مرجع توابع سرور (API)](./refactored/docs/API.md) · [استقرار](./refactored/docs/DEPLOYMENT.md)
 
 ---
 
