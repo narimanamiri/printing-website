@@ -8,7 +8,7 @@ import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
-import { formatToman, formatNumberFa } from "@/lib/stl-parser";
+import { formatToman, formatNumberFa, formatDurationFa } from "@/lib/stl-parser";
 import { confirmOrderPayment, setOrderStatus } from "@/lib/admin.functions";
 
 export const Route = createFileRoute("/admin")({
@@ -25,6 +25,11 @@ type AdminOrder = {
   id: string; user_id: string; filename: string; file_path: string;
   weight_g: number; infill: number; material: string; cost_toman: number;
   status: string; receipt_path: string | null; notes: string | null;
+  print_params: {
+    layerHeight?: number; walls?: number; filamentLengthM?: number;
+    printTimeMin?: number; support?: boolean;
+    bbox?: { x: number; y: number; z: number };
+  } | null;
   created_at: string;
 };
 
@@ -142,6 +147,16 @@ function AdminPage() {
                     <div className="text-xs text-muted-foreground">{formatNumberFa(Number(o.weight_g), 1)} گرم · {o.material} · {formatNumberFa(o.infill)}٪</div>
                   </div>
                 </div>
+
+                {o.print_params && (
+                  <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground font-mono">
+                    {o.print_params.printTimeMin != null && <span>⏱ {formatDurationFa(o.print_params.printTimeMin)}</span>}
+                    {o.print_params.filamentLengthM != null && <span>🧵 {formatNumberFa(o.print_params.filamentLengthM, 1)} متر</span>}
+                    {o.print_params.bbox && <span>📐 {formatNumberFa(o.print_params.bbox.x)}×{formatNumberFa(o.print_params.bbox.y)}×{formatNumberFa(o.print_params.bbox.z)} mm</span>}
+                    {o.print_params.layerHeight != null && <span>▦ {formatNumberFa(o.print_params.layerHeight, 2)}mm</span>}
+                    {o.print_params.support && <span>⛰ ساپورت</span>}
+                  </div>
+                )}
 
                 {o.notes && <p className="mt-3 text-xs text-muted-foreground border-r-2 border-border pr-3">{o.notes}</p>}
 

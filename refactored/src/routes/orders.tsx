@@ -7,7 +7,7 @@ import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
-import { formatToman, formatNumberFa } from "@/lib/stl-parser";
+import { formatToman, formatNumberFa, formatDurationFa } from "@/lib/stl-parser";
 import { BUSINESS } from "@/lib/business";
 
 export const Route = createFileRoute("/orders")({
@@ -17,8 +17,20 @@ export const Route = createFileRoute("/orders")({
       { name: "description", content: "پیگیری سفارش‌های چاپ سه‌بعدی شما." },
     ],
   }),
+  validateSearch: (search: Record<string, unknown>): { highlight?: string } => ({
+    highlight: typeof search.highlight === "string" ? search.highlight : undefined,
+  }),
   component: OrdersPage,
 });
+
+type PrintParams = {
+  layerHeight?: number;
+  walls?: number;
+  filamentLengthM?: number;
+  printTimeMin?: number;
+  bbox?: { x: number; y: number; z: number };
+  support?: boolean;
+} | null;
 
 type Order = {
   id: string;
@@ -31,6 +43,7 @@ type Order = {
   receipt_path: string | null;
   notes: string | null;
   admin_notes: string | null;
+  print_params: PrintParams;
   created_at: string;
 };
 
@@ -38,6 +51,7 @@ function OrdersPage() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const { highlight } = Route.useSearch();
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/auth" });
@@ -79,7 +93,7 @@ function OrdersPage() {
         ) : (
           <div className="space-y-4">
             {orders.map((o) => (
-              <OrderCard key={o.id} order={o} userId={user!.id} onChanged={() => qc.invalidateQueries({ queryKey: ["my-orders"] })} />
+              <OrderCard key={o.id} order={o} userId={user!.id} highlighted={o.id === highlight} onChanged={() => qc.invalidateQueries({ queryKey: ["my-orders"] })} />
             ))}
           </div>
         )}
@@ -98,10 +112,11 @@ const STATUS_META: Record<string, { label: string; icon: typeof Clock; color: st
   cancelled: { label: "لغو شده", icon: XCircle, color: "text-destructive" },
 };
 
-function OrderCard({ order, userId, onChanged }: { order: Order; userId: string; onChanged: () => void }) {
+function OrderCard({ order, userId, highlighted, onChanged }: { order: Order; userId: string; highlighted?: boolean; onChanged: () => void }) {
   const [uploading, setUploading] = useState(false);
   const meta = STATUS_META[order.status] ?? STATUS_META.pending_payment;
   const Icon = meta.icon;
+  const pp = order.print_params;
 
   const uploadReceipt = async (file: File) => {
     setUploading(true);
@@ -124,7 +139,7 @@ function OrderCard({ order, userId, onChanged }: { order: Order; userId: string;
   };
 
   return (
-    <div className="surface rounded-2xl p-6">
+    <div className={`surface rounded-2xl p-6 transition-all ${highlighted ? "glow border-primary" : ""}`}>
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
@@ -146,6 +161,16 @@ function OrderCard({ order, userId, onChanged }: { order: Order; userId: string;
         <Stat label="وزن" value={`${formatNumberFa(Number(order.weight_g), 1)} گرم`} />
         <Stat label="هزینه" value={formatToman(order.cost_toman)} highlight />
       </div>
+
+      {pp && (
+        <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground font-mono">
+          {pp.printTimeMin != null && <span>⏱ {formatDurationFa(pp.printTimeMin)}</span>}
+          {pp.filamentLengthM != null && <span>🧵 {formatNumberFa(pp.filamentLengthM, 1)} متر</span>}
+          {pp.bbox && <span>📐 {formatNumberFa(pp.bbox.x)}×{formatNumberFa(pp.bbox.y)}×{formatNumberFa(pp.bbox.z)} mm</span>}
+          {pp.layerHeight != null && <span>▦ لایه {formatNumberFa(pp.layerHeight, 2)}mm</span>}
+          {pp.support && <span>⛰ ساپورت</span>}
+        </div>
+      )}
 
       {order.notes && <p className="mt-4 text-xs text-muted-foreground border-r-2 border-border pr-3">{order.notes}</p>}
       {order.admin_notes && <p className="mt-3 text-xs text-primary border-r-2 border-primary pr-3">از کارگاه: {order.admin_notes}</p>}

@@ -26,6 +26,7 @@ export type Database = {
           infill: number
           material: string
           notes: string | null
+          print_params: Json | null
           queue_path: string | null
           receipt_path: string | null
           status: Database["public"]["Enums"]["order_status"]
@@ -45,6 +46,7 @@ export type Database = {
           infill?: number
           material?: string
           notes?: string | null
+          print_params?: Json | null
           queue_path?: string | null
           receipt_path?: string | null
           status?: Database["public"]["Enums"]["order_status"]
@@ -64,6 +66,7 @@ export type Database = {
           infill?: number
           material?: string
           notes?: string | null
+          print_params?: Json | null
           queue_path?: string | null
           receipt_path?: string | null
           status?: Database["public"]["Enums"]["order_status"]
