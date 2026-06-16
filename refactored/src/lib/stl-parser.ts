@@ -24,148 +24,146 @@ export interface StlStats {
 const HORIZONTAL_NZ = Math.cos((45 * Math.PI) / 180); // |nz| ≥ 0.707 → top/bottom skin
 const OVERHANG_NZ = -0.5; // nz < -0.5 (face tilts >30° below horizontal) → needs support
 
-interface MeshAccumulator {
-  volume: number; // signed, mm³
-  surface: number; // mm²
-  vertical: number; // mm²
-  horizontal: number; // mm²
-  downProj: number; // mm² projected (assuming normals as computed)
-  upProj: number; // mm² projected (if winding is inverted)
-  min: [number, number, number];
-  max: [number, number, number];
+// How the part is placed on the bed: uniform scale + Euler rotation (degrees).
+// Rotating/scaling changes which faces overhang and the bounding box, so the
+// estimate updates live as the user reorients the model.
+export interface Orient {
+  scale: number; // 1 = original size
+  rotXDeg: number;
+  rotYDeg: number;
+  rotZDeg: number;
 }
+export const IDENTITY_ORIENT: Orient = { scale: 1, rotXDeg: 0, rotYDeg: 0, rotZDeg: 0 };
 
-function emptyAcc(): MeshAccumulator {
-  return {
-    volume: 0,
-    surface: 0,
-    vertical: 0,
-    horizontal: 0,
-    downProj: 0,
-    upProj: 0,
-    min: [Infinity, Infinity, Infinity],
-    max: [-Infinity, -Infinity, -Infinity],
-  };
-}
-
-function addTriangle(
-  acc: MeshAccumulator,
-  ax: number, ay: number, az: number,
-  bx: number, by: number, bz: number,
-  cx: number, cy: number, cz: number,
-) {
-  // signed volume of tetrahedron (a,b,c,origin)
-  acc.volume +=
-    (ax * (by * cz - cy * bz) -
-      bx * (ay * cz - cy * az) +
-      cx * (ay * bz - by * az)) /
-    6;
-
-  // edges & cross product → area + normal
-  const e1x = bx - ax, e1y = by - ay, e1z = bz - az;
-  const e2x = cx - ax, e2y = cy - ay, e2z = cz - az;
-  const nx = e1y * e2z - e1z * e2y;
-  const ny = e1z * e2x - e1x * e2z;
-  const nz = e1x * e2y - e1y * e2x;
-  const nLen = Math.hypot(nx, ny, nz);
-  const area = nLen / 2;
-  if (area > 0) {
-    acc.surface += area;
-    const nzUnit = nz / nLen;
-    const absNz = Math.abs(nzUnit);
-    if (absNz >= HORIZONTAL_NZ) acc.horizontal += area;
-    else acc.vertical += area;
-    // projected footprint of down-/up-facing overhangs (area × |cos to vertical|)
-    if (nzUnit < OVERHANG_NZ) acc.downProj += area * absNz;
-    else if (nzUnit > -OVERHANG_NZ) acc.upProj += area * absNz;
-  }
-
-  for (const [x, y, z] of [[ax, ay, az], [bx, by, bz], [cx, cy, cz]] as const) {
-    if (x < acc.min[0]) acc.min[0] = x; if (x > acc.max[0]) acc.max[0] = x;
-    if (y < acc.min[1]) acc.min[1] = y; if (y > acc.max[1]) acc.max[1] = y;
-    if (z < acc.min[2]) acc.min[2] = z; if (z > acc.max[2]) acc.max[2] = z;
-  }
-}
-
-function finalize(acc: MeshAccumulator, triangles: number): StlStats {
-  // If the mesh winding is inverted, "down-facing" is actually the up-projection.
-  const overhangMm2 = acc.volume >= 0 ? acc.downProj : acc.upProj;
-  return {
-    volumeCm3: Math.abs(acc.volume) / 1000,
-    surfaceAreaCm2: acc.surface / 100,
-    verticalAreaCm2: acc.vertical / 100,
-    horizontalAreaCm2: acc.horizontal / 100,
-    overhangAreaCm2: overhangMm2 / 100,
-    triangles,
-    bbox: {
-      x: acc.max[0] - acc.min[0],
-      y: acc.max[1] - acc.min[1],
-      z: acc.max[2] - acc.min[2],
-    },
-  };
-}
-
-function parseBinary(buffer: ArrayBuffer): StlStats | null {
+// ── Geometry parsing: return raw triangle positions (9 floats / triangle) ──
+function parsePositionsBinary(buffer: ArrayBuffer): Float32Array | null {
   const view = new DataView(buffer);
   if (buffer.byteLength < 84) return null;
   const triCount = view.getUint32(80, true);
   if (buffer.byteLength < 84 + triCount * 50) return null;
-
-  const acc = emptyAcc();
+  const out = new Float32Array(triCount * 9);
   let off = 84;
   for (let i = 0; i < triCount; i++) {
-    off += 12; // skip stored normal (often unreliable — we compute our own)
-    const ax = view.getFloat32(off, true); const ay = view.getFloat32(off + 4, true); const az = view.getFloat32(off + 8, true);
-    const bx = view.getFloat32(off + 12, true); const by = view.getFloat32(off + 16, true); const bz = view.getFloat32(off + 20, true);
-    const cx = view.getFloat32(off + 24, true); const cy = view.getFloat32(off + 28, true); const cz = view.getFloat32(off + 32, true);
-    off += 36 + 2; // 9 floats + attr byte count
-    addTriangle(acc, ax, ay, az, bx, by, bz, cx, cy, cz);
+    off += 12; // skip stored normal
+    for (let j = 0; j < 9; j++) { out[i * 9 + j] = view.getFloat32(off, true); off += 4; }
+    off += 2; // attr byte count
   }
-  return finalize(acc, triCount);
+  return out;
 }
 
-function parseAscii(text: string): StlStats | null {
+function parsePositionsAscii(text: string): Float32Array | null {
   const re = /vertex\s+([-+\d.eE]+)\s+([-+\d.eE]+)\s+([-+\d.eE]+)/g;
   const verts: number[] = [];
   let m: RegExpExecArray | null;
-  while ((m = re.exec(text)) !== null) {
-    verts.push(parseFloat(m[1]), parseFloat(m[2]), parseFloat(m[3]));
-  }
+  while ((m = re.exec(text)) !== null) verts.push(parseFloat(m[1]), parseFloat(m[2]), parseFloat(m[3]));
   if (verts.length === 0 || verts.length % 9 !== 0) return null;
-
-  const acc = emptyAcc();
-  const triCount = verts.length / 9;
-  for (let i = 0; i < verts.length; i += 9) {
-    addTriangle(
-      acc,
-      verts[i], verts[i + 1], verts[i + 2],
-      verts[i + 3], verts[i + 4], verts[i + 5],
-      verts[i + 6], verts[i + 7], verts[i + 8],
-    );
-  }
-  return finalize(acc, triCount);
+  return new Float32Array(verts);
 }
 
-export async function parseStl(file: File | ArrayBuffer): Promise<StlStats> {
+// Parse an STL into a flat positions array. Reused by the estimator AND the 3D
+// viewer so a model is only read once.
+export async function parseGeometry(file: File | ArrayBuffer): Promise<Float32Array> {
   const buffer = file instanceof ArrayBuffer ? file : await file.arrayBuffer();
   if (buffer.byteLength < 84) throw new Error("فایل STL ناقص یا خراب است.");
-
-  // A valid binary STL has a body of exactly 84 + triCount*50 bytes.
   const triCountField = new DataView(buffer).getUint32(80, true);
   const looksBinary = buffer.byteLength === 84 + triCountField * 50;
-
   if (!looksBinary) {
     const header = new TextDecoder().decode(buffer.slice(0, 6)).trim().toLowerCase();
     if (header.startsWith("solid")) {
-      const result = parseAscii(new TextDecoder().decode(buffer));
-      if (result && result.triangles > 0) return result;
+      const pos = parsePositionsAscii(new TextDecoder().decode(buffer));
+      if (pos && pos.length > 0) return pos;
     }
   }
-  const result = parseBinary(buffer);
-  if (!result || result.triangles === 0) {
-    throw new Error("نتوانستیم فایل STL را بخوانیم. مطمئن شوید فایل معتبر است.");
+  const pos = parsePositionsBinary(buffer);
+  if (!pos || pos.length === 0) throw new Error("نتوانستیم فایل STL را بخوانیم. مطمئن شوید فایل معتبر است.");
+  return pos;
+}
+
+// Apply scale + Euler rotation (X then Y then Z) to a positions array.
+export function applyOrient(pos: Float32Array, o: Orient): Float32Array {
+  if (o.scale === 1 && o.rotXDeg === 0 && o.rotYDeg === 0 && o.rotZDeg === 0) return pos;
+  const s = o.scale;
+  const rx = (o.rotXDeg * Math.PI) / 180, ry = (o.rotYDeg * Math.PI) / 180, rz = (o.rotZDeg * Math.PI) / 180;
+  const cx = Math.cos(rx), sx = Math.sin(rx);
+  const cy = Math.cos(ry), sy = Math.sin(ry);
+  const cz = Math.cos(rz), sz = Math.sin(rz);
+  const out = new Float32Array(pos.length);
+  for (let i = 0; i < pos.length; i += 3) {
+    const x = pos[i] * s, y = pos[i + 1] * s, z = pos[i + 2] * s;
+    // Rx
+    const y1 = y * cx - z * sx, z1 = y * sx + z * cx;
+    // Ry
+    const x2 = x * cy + z1 * sy, z2 = -x * sy + z1 * cy;
+    // Rz
+    const x3 = x2 * cz - y1 * sz, y3 = x2 * sz + y1 * cz;
+    out[i] = x3; out[i + 1] = y3; out[i + 2] = z2;
   }
-  return result;
+  return out;
+}
+
+// Compute slicer stats from positions, applying the orientation in one pass.
+export function statsFromGeometry(pos: Float32Array, o: Orient = IDENTITY_ORIENT): StlStats {
+  const triCount = Math.floor(pos.length / 9);
+  const s = o.scale;
+  const rx = (o.rotXDeg * Math.PI) / 180, ry = (o.rotYDeg * Math.PI) / 180, rz = (o.rotZDeg * Math.PI) / 180;
+  const cx = Math.cos(rx), sx = Math.sin(rx);
+  const cy = Math.cos(ry), sy = Math.sin(ry);
+  const cz = Math.cos(rz), sz = Math.sin(rz);
+  const xf = (x0: number, y0: number, z0: number): [number, number, number] => {
+    const x = x0 * s, y = y0 * s, z = z0 * s;
+    const y1 = y * cx - z * sx, z1 = y * sx + z * cx;
+    const x2 = x * cy + z1 * sy, z2 = -x * sy + z1 * cy;
+    return [x2 * cz - y1 * sz, x2 * sz + y1 * cz, z2];
+  };
+
+  let volume = 0, surface = 0, vertical = 0, horizontal = 0, downProj = 0, upProj = 0;
+  let minX = Infinity, minY = Infinity, minZ = Infinity, maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+
+  for (let i = 0; i < triCount * 9; i += 9) {
+    const [ax, ay, az] = xf(pos[i], pos[i + 1], pos[i + 2]);
+    const [bx, by, bz] = xf(pos[i + 3], pos[i + 4], pos[i + 5]);
+    const [ccx, ccy, ccz] = xf(pos[i + 6], pos[i + 7], pos[i + 8]);
+
+    volume += (ax * (by * ccz - ccy * bz) - bx * (ay * ccz - ccy * az) + ccx * (ay * bz - by * az)) / 6;
+
+    const e1x = bx - ax, e1y = by - ay, e1z = bz - az;
+    const e2x = ccx - ax, e2y = ccy - ay, e2z = ccz - az;
+    const nx = e1y * e2z - e1z * e2y, ny = e1z * e2x - e1x * e2z, nz = e1x * e2y - e1y * e2x;
+    const nLen = Math.hypot(nx, ny, nz);
+    const area = nLen / 2;
+    if (area > 0) {
+      surface += area;
+      const nzUnit = nz / nLen, absNz = Math.abs(nzUnit);
+      if (absNz >= HORIZONTAL_NZ) horizontal += area; else vertical += area;
+      if (nzUnit < OVERHANG_NZ) downProj += area * absNz;
+      else if (nzUnit > -OVERHANG_NZ) upProj += area * absNz;
+    }
+    if (ax < minX) minX = ax; if (ax > maxX) maxX = ax;
+    if (bx < minX) minX = bx; if (bx > maxX) maxX = bx;
+    if (ccx < minX) minX = ccx; if (ccx > maxX) maxX = ccx;
+    if (ay < minY) minY = ay; if (ay > maxY) maxY = ay;
+    if (by < minY) minY = by; if (by > maxY) maxY = by;
+    if (ccy < minY) minY = ccy; if (ccy > maxY) maxY = ccy;
+    if (az < minZ) minZ = az; if (az > maxZ) maxZ = az;
+    if (bz < minZ) minZ = bz; if (bz > maxZ) maxZ = bz;
+    if (ccz < minZ) minZ = ccz; if (ccz > maxZ) maxZ = ccz;
+  }
+
+  const overhangMm2 = volume >= 0 ? downProj : upProj;
+  return {
+    volumeCm3: Math.abs(volume) / 1000,
+    surfaceAreaCm2: surface / 100,
+    verticalAreaCm2: vertical / 100,
+    horizontalAreaCm2: horizontal / 100,
+    overhangAreaCm2: overhangMm2 / 100,
+    triangles: triCount,
+    bbox: { x: maxX - minX, y: maxY - minY, z: maxZ - minZ },
+  };
+}
+
+export async function parseStl(file: File | ArrayBuffer, o: Orient = IDENTITY_ORIENT): Promise<StlStats> {
+  const pos = await parseGeometry(file);
+  return statsFromGeometry(pos, o);
 }
 
 // ───────────────────────── Material library ─────────────────────────
@@ -223,10 +221,12 @@ export const MIN_ORDER_TOMAN = 50000;
 // The workshop's printable build volume in mm (an i3-class machine).
 export const BUILD_VOLUME = { x: 250, y: 210, z: 210 };
 
+type Vec3 = { x: number; y: number; z: number };
+
 // Does the part fit on the bed (allowing free rotation)? Compares sorted dims.
-export function fitsBuildVolume(bbox: { x: number; y: number; z: number }): boolean {
+export function fitsBuildVolume(bbox: Vec3, bv: Vec3 = BUILD_VOLUME): boolean {
   const m = [bbox.x, bbox.y, bbox.z].sort((a, b) => a - b);
-  const b = [BUILD_VOLUME.x, BUILD_VOLUME.y, BUILD_VOLUME.z].sort((a, b) => a - b);
+  const b = [bv.x, bv.y, bv.z].sort((a, b) => a - b);
   return m[0] <= b[0] && m[1] <= b[1] && m[2] <= b[2];
 }
 
@@ -236,6 +236,9 @@ export interface PrintSettings {
   material: MaterialKey;
   support: boolean;
   quantity?: number; // number of copies (default 1)
+  pricePerGram?: number; // overrides the default (from business settings)
+  minOrderToman?: number;
+  buildVolume?: Vec3;
 }
 
 export interface PrintEstimate {
@@ -294,10 +297,12 @@ export function estimatePrint(stats: StlStats, s: PrintSettings): PrintEstimate 
   const flowMm3PerS = PRINT_SPEED * LINE_WIDTH * q.layerHeight; // mm³/s
   const printTimeMin = flowMm3PerS > 0 ? (usedCm3 * 1000) / flowMm3PerS / 60 / TIME_EFFICIENCY : 0;
 
+  const price = s.pricePerGram ?? PRICE_PER_GRAM_TOMAN;
+  const minOrder = s.minOrderToman ?? MIN_ORDER_TOMAN;
   const unitWeightG = weightG / qty;
-  const unitCostToman = Math.ceil(unitWeightG * PRICE_PER_GRAM_TOMAN * mat.priceFactor);
+  const unitCostToman = Math.ceil(unitWeightG * price * mat.priceFactor);
   const rawCost = unitCostToman * qty;
-  const costToman = Math.max(rawCost, MIN_ORDER_TOMAN);
+  const costToman = Math.max(rawCost, minOrder);
 
   return {
     weightG,
@@ -307,7 +312,7 @@ export function estimatePrint(stats: StlStats, s: PrintSettings): PrintEstimate 
     unitCostToman,
     quantity: qty,
     minApplied: costToman > rawCost,
-    fitsBuildVolume: fitsBuildVolume(stats.bbox),
+    fitsBuildVolume: fitsBuildVolume(stats.bbox, s.buildVolume),
     needsSupport,
     breakdown: { shellG, infillG, supportG },
     volumeUsedCm3: usedCm3,

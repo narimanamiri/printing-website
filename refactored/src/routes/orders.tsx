@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Upload, Loader2, FileBox, Clock, Check, Hammer, PackageCheck, XCircle, AlertCircle, Copy, CreditCard } from "lucide-react";
+import { Upload, Loader2, FileBox, Clock, Check, Hammer, PackageCheck, XCircle, AlertCircle, Copy, CreditCard, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
@@ -10,6 +10,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { listMyOrders, uploadReceipt } from "@/lib/orders.functions";
 import { formatToman, formatNumberFa, formatDurationFa } from "@/lib/stl-parser";
 import { BUSINESS } from "@/lib/business";
+import { useSettings } from "@/hooks/use-settings";
 import type { OrderDTO } from "@/lib/types";
 
 export const Route = createFileRoute("/orders")({
@@ -119,8 +120,14 @@ function OrderCard({ order, highlighted, onChanged }: { order: OrderDTO; highlig
             #{order.id.slice(0, 8)} · {new Date(order.createdAt).toLocaleString("fa-IR")}
           </div>
         </div>
-        <div className={`flex items-center gap-1.5 text-sm ${meta.color} font-medium`}>
-          <Icon className="size-4" /> {meta.label}
+        <div className="flex flex-col items-end gap-1.5">
+          <div className={`flex items-center gap-1.5 text-sm ${meta.color} font-medium`}>
+            <Icon className="size-4" /> {meta.label}
+          </div>
+          <Link to="/invoice/$orderId" params={{ orderId: order.id }}
+            className="text-[11px] text-muted-foreground hover:text-primary flex items-center gap-1 transition-colors">
+            <FileText className="size-3" /> فاکتور
+          </Link>
         </div>
       </div>
 
@@ -204,13 +211,15 @@ function StatusTimeline({ status }: { status: string }) {
 }
 
 function PaymentBlock({ amount, uploading, onUpload }: { amount: number; uploading: boolean; onUpload: (f: File) => void }) {
+  const settings = useSettings();
+  const biz = settings?.business ?? BUSINESS;
   const copy = (text: string, label: string) => {
     navigator.clipboard?.writeText(text.replace(/[-\s]/g, ""));
     toast.success(`${label} کپی شد`);
   };
 
   const toFa = (s: string) => s.replace(/[0-9]/g, (d) => "۰۱۲۳۴۵۶۷۸۹"[+d]);
-  const cardGroups = BUSINESS.cardNumber.replace(/\D/g, "").match(/.{1,4}/g) ?? [];
+  const cardGroups = biz.cardNumber.replace(/\D/g, "").match(/.{1,4}/g) ?? [];
 
   return (
     <div className="mt-6 pt-6 border-t border-border">
@@ -242,7 +251,7 @@ function PaymentBlock({ amount, uploading, onUpload }: { amount: number; uploadi
             </div>
             <div className="text-right" dir="rtl">
               <div className="text-[10px] uppercase tracking-widest opacity-70">بانک</div>
-              <div className="text-sm font-semibold">{BUSINESS.bankName}</div>
+              <div className="text-sm font-semibold">{biz.bankName}</div>
             </div>
           </div>
 
@@ -255,7 +264,7 @@ function PaymentBlock({ amount, uploading, onUpload }: { amount: number; uploadi
           <div className="flex items-end justify-between" dir="rtl">
             <div>
               <div className="text-[10px] uppercase tracking-widest opacity-70 mb-1">به نام</div>
-              <div className="text-sm font-semibold">{BUSINESS.cardHolder}</div>
+              <div className="text-sm font-semibold">{biz.cardHolder}</div>
             </div>
             <div className="text-left" dir="ltr">
               <div className="text-[10px] uppercase tracking-widest opacity-70 mb-1 text-right">CVV2 / PIN2</div>
@@ -265,7 +274,7 @@ function PaymentBlock({ amount, uploading, onUpload }: { amount: number; uploadi
         </div>
 
         <div className="grid grid-cols-2 gap-2 mt-3">
-          <button type="button" onClick={() => copy(BUSINESS.cardNumber, "شماره کارت")}
+          <button type="button" onClick={() => copy(biz.cardNumber, "شماره کارت")}
             className="flex items-center justify-center gap-2 rounded-lg border border-border bg-secondary/60 hover:bg-secondary px-3 py-2.5 text-xs font-medium transition-colors">
             <Copy className="size-3.5" /> کپی شماره کارت
           </button>
@@ -278,7 +287,7 @@ function PaymentBlock({ amount, uploading, onUpload }: { amount: number; uploadi
 
       <div className="mt-5 rounded-xl border border-border bg-background/60 p-4 space-y-3 text-sm">
         <Detail label="مبلغ قابل پرداخت" value={formatToman(amount)} highlight onCopy={() => copy(String(amount), "مبلغ")} />
-        <Detail label="شماره شبا" value={BUSINESS.sheba} mono onCopy={() => copy(BUSINESS.sheba, "شماره شبا")} />
+        <Detail label="شماره شبا" value={biz.sheba} mono onCopy={() => copy(biz.sheba, "شماره شبا")} />
       </div>
 
       <ol className="mt-5 space-y-2 text-xs text-muted-foreground list-none">

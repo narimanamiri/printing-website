@@ -17,11 +17,29 @@ export const dashboardStats = createServerFn({ method: "GET" }).handler(async ()
   let revenueToman = 0, todayOrders = 0;
   const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
   const todayIso = todayStart.toISOString();
+
+  // Last 14 days revenue/count series for the chart.
+  const daily: { day: string; revenue: number; count: number }[] = [];
+  const idx = new Map<string, number>();
+  for (let i = 13; i >= 0; i--) {
+    const dt = new Date(todayStart); dt.setDate(dt.getDate() - i);
+    const day = dt.toISOString().slice(0, 10);
+    idx.set(day, daily.length);
+    daily.push({ day, revenue: 0, count: 0 });
+  }
+
   for (const o of d.orders) {
     byStatus[o.status] = (byStatus[o.status] ?? 0) + 1;
     if (REVENUE_STATUSES.has(o.status)) revenueToman += o.costToman;
     if (o.createdAt >= todayIso) todayOrders++;
+    const dayKey = o.createdAt.slice(0, 10);
+    const di = idx.get(dayKey);
+    if (di !== undefined) {
+      daily[di].count++;
+      if (REVENUE_STATUSES.has(o.status)) daily[di].revenue += o.costToman;
+    }
   }
+
   return {
     totalOrders: d.orders.length,
     todayOrders,
@@ -29,6 +47,7 @@ export const dashboardStats = createServerFn({ method: "GET" }).handler(async ()
     revenueToman,
     awaitingConfirmation: byStatus.awaiting_confirmation,
     byStatus,
+    daily,
   };
 });
 

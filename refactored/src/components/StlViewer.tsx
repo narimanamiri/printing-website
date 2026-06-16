@@ -1,40 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { Loader2, Move3d } from "lucide-react";
 
-// Lightweight, dependency-free STL preview. Parses triangle positions, then
-// renders them on a 2D canvas with orthographic projection, flat Lambert
-// shading, back-face culling and a painter's-algorithm depth sort.
-// Drag to rotate; idle auto-rotation. Huge meshes are sampled for smoothness.
+// Lightweight, dependency-free STL preview. Takes already-oriented triangle
+// positions and renders them on a 2D canvas with orthographic projection, flat
+// Lambert shading, back-face culling and a painter's-algorithm depth sort.
+// Drag to rotate the camera; idle auto-rotation. Overhang faces are highlighted.
+// Huge meshes are sampled for smoothness.
 
 const MAX_RENDER_TRIS = 16000;
-
-function readGeometry(buffer: ArrayBuffer): Float32Array | null {
-  if (buffer.byteLength < 84) return null;
-  const view = new DataView(buffer);
-  const triCount = view.getUint32(80, true);
-  const looksBinary = buffer.byteLength === 84 + triCount * 50;
-
-  if (looksBinary) {
-    const out = new Float32Array(triCount * 9);
-    let off = 84;
-    for (let i = 0; i < triCount; i++) {
-      off += 12; // skip normal
-      for (let j = 0; j < 9; j++) { out[i * 9 + j] = view.getFloat32(off, true); off += 4; }
-      off += 2; // attr
-    }
-    return out;
-  }
-
-  // ASCII
-  const text = new TextDecoder().decode(buffer);
-  if (!text.trim().toLowerCase().startsWith("solid")) return null;
-  const re = /vertex\s+([-+\d.eE]+)\s+([-+\d.eE]+)\s+([-+\d.eE]+)/g;
-  const verts: number[] = [];
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(text)) !== null) verts.push(+m[1], +m[2], +m[3]);
-  if (verts.length === 0 || verts.length % 9 !== 0) return null;
-  return new Float32Array(verts);
-}
 
 interface Prepared {
   tris: Float32Array; // centered + scaled, possibly sampled
@@ -97,7 +70,7 @@ function prepare(raw: Float32Array): Prepared | null {
   return { tris, overhang, count };
 }
 
-export function StlViewer({ file, highlightOverhang = true }: { file: File | null; highlightOverhang?: boolean }) {
+export function StlViewer({ positions, parsing = false, highlightOverhang = true }: { positions: Float32Array | null; parsing?: boolean; highlightOverhang?: boolean }) {
   const overhangRef = useRef(highlightOverhang);
   overhangRef.current = highlightOverhang;
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -105,24 +78,15 @@ export function StlViewer({ file, highlightOverhang = true }: { file: File | nul
   const rotRef = useRef({ x: -0.5, y: 0.6 });
   const dragRef = useRef<{ x: number; y: number } | null>(null);
   const autoRef = useRef(true);
-  const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    let cancelled = false;
-    if (!file) { prepRef.current = null; setReady(false); return; }
-    setLoading(true); setReady(false);
-    file.arrayBuffer()
-      .then((buf) => {
-        if (cancelled) return;
-        const raw = readGeometry(buf);
-        prepRef.current = raw ? prepare(raw) : null;
-        setReady(!!prepRef.current);
-      })
-      .catch(() => { prepRef.current = null; })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, [file]);
+    if (!positions || positions.length === 0) { prepRef.current = null; setReady(false); return; }
+    prepRef.current = prepare(positions);
+    setReady(!!prepRef.current);
+  }, [positions]);
+
+  const loading = parsing && !ready;
 
   useEffect(() => {
     const canvas = canvasRef.current;

@@ -1,8 +1,9 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Loader2, Check, Hammer, PackageCheck, XCircle, Eye, Download, ShieldAlert, FileBox, Wallet, Inbox, Users, CalendarDays } from "lucide-react";
+import { Loader2, Check, Hammer, PackageCheck, XCircle, Eye, Download, ShieldAlert, FileBox, Wallet, Inbox, Users, CalendarDays, Search, FileSpreadsheet, FileText } from "lucide-react";
+import { ResponsiveContainer, AreaChart, Area, XAxis, Tooltip } from "recharts";
 import { toast } from "sonner";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
@@ -32,6 +33,9 @@ function AdminPage() {
   const fileFn = useServerFn(getOrderFile);
 
   const [filter, setFilter] = useState<string>("awaiting_confirmation");
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(0);
+  const PER_PAGE = 10;
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/auth" });
@@ -115,6 +119,29 @@ function AdminPage() {
     { v: "all", l: "همه" },
   ];
 
+  const filtered = (orders ?? []).filter((o) => {
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+    return o.filename.toLowerCase().includes(q) || o.customerName.toLowerCase().includes(q) ||
+      o.customerEmail.toLowerCase().includes(q) || o.customerPhone.includes(q) || o.id.includes(q);
+  });
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
+  const pageSafe = Math.min(page, pageCount - 1);
+  const paged = filtered.slice(pageSafe * PER_PAGE, pageSafe * PER_PAGE + PER_PAGE);
+
+  const exportCsv = () => {
+    const head = ["id", "filename", "customer", "email", "phone", "material", "infill", "quantity", "weight_g", "cost_toman", "status", "created_at"];
+    const rows = [head, ...filtered.map((o) => [
+      o.id, o.filename, o.customerName, o.customerEmail, o.customerPhone, o.material,
+      String(o.infill), String(o.quantity), String(o.weightG), String(o.costToman), o.status, o.createdAt,
+    ])];
+    const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = `orders-${filter}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
@@ -133,22 +160,37 @@ function AdminPage() {
           </div>
         )}
 
-        <div className="flex gap-2 mb-6 flex-wrap">
+        {stats && stats.daily.some((d) => d.revenue > 0 || d.count > 0) && (
+          <RevenueChart daily={stats.daily} />
+        )}
+
+        <div className="flex flex-wrap items-center gap-2 mb-6">
           {filters.map((f) => (
-            <button key={f.v} onClick={() => setFilter(f.v)}
+            <button key={f.v} onClick={() => { setFilter(f.v); setPage(0); }}
               className={`px-4 py-2 rounded-lg text-sm border transition-colors ${filter === f.v ? "border-primary bg-primary/10 text-primary" : "border-border hover:bg-secondary"}`}>
               {f.l}
             </button>
           ))}
+          <div className="flex-1" />
+          <div className="relative">
+            <Search className="size-4 absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <input value={search} onChange={(e) => { setSearch(e.target.value); setPage(0); }}
+              placeholder="جست‌وجو…"
+              className="rounded-lg border border-border bg-input pr-9 pl-3 py-2 text-sm w-44 outline-none focus:border-primary focus:ring-2 focus:ring-primary/30" />
+          </div>
+          <button onClick={exportCsv} disabled={filtered.length === 0}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm border border-border hover:bg-secondary disabled:opacity-40">
+            <FileSpreadsheet className="size-4" /> CSV
+          </button>
         </div>
 
         {isLoading ? (
           <div className="flex justify-center py-20"><Loader2 className="size-6 animate-spin text-primary" /></div>
-        ) : !orders || orders.length === 0 ? (
+        ) : filtered.length === 0 ? (
           <div className="surface rounded-2xl p-16 text-center text-muted-foreground">هیچ سفارشی در این بخش نیست.</div>
         ) : (
           <div className="space-y-4">
-            {orders.map((o: AdminOrderDTO) => (
+            {paged.map((o: AdminOrderDTO) => (
               <div key={o.id} className="surface rounded-2xl p-6">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
@@ -191,6 +233,9 @@ function AdminPage() {
                       <Eye className="size-3.5" /> رسید پرداخت
                     </button>
                   )}
+                  <Link to="/invoice/$orderId" params={{ orderId: o.id }} className="text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border hover:bg-secondary">
+                    <FileText className="size-3.5" /> فاکتور
+                  </Link>
                   <div className="flex-1" />
                   {o.status === "awaiting_confirmation" && (
                     <button onClick={() => onConfirm(o.id)} className="text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-md btn-primary">
@@ -215,10 +260,51 @@ function AdminPage() {
                 </div>
               </div>
             ))}
+
+            {pageCount > 1 && (
+              <div className="flex items-center justify-center gap-3 pt-2">
+                <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={pageSafe === 0}
+                  className="px-3 py-1.5 rounded-md border border-border text-sm hover:bg-secondary disabled:opacity-40">قبلی</button>
+                <span className="text-sm text-muted-foreground font-mono">{formatNumberFa(pageSafe + 1)} / {formatNumberFa(pageCount)}</span>
+                <button onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))} disabled={pageSafe >= pageCount - 1}
+                  className="px-3 py-1.5 rounded-md border border-border text-sm hover:bg-secondary disabled:opacity-40">بعدی</button>
+              </div>
+            )}
           </div>
         )}
       </main>
       <Footer />
+    </div>
+  );
+}
+
+function RevenueChart({ daily }: { daily: { day: string; revenue: number; count: number }[] }) {
+  const data = daily.map((d) => ({
+    label: new Date(d.day).toLocaleDateString("fa-IR", { month: "numeric", day: "numeric" }),
+    revenue: d.revenue,
+  }));
+  return (
+    <div className="surface rounded-2xl p-5 mb-8">
+      <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-mono mb-3">درآمد ۱۴ روز اخیر</div>
+      <div className="h-40" dir="ltr">
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: 4 }}>
+            <defs>
+              <linearGradient id="rev" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="oklch(0.86 0.16 195)" stopOpacity={0.6} />
+                <stop offset="100%" stopColor="oklch(0.86 0.16 195)" stopOpacity={0.02} />
+              </linearGradient>
+            </defs>
+            <XAxis dataKey="label" tick={{ fontSize: 10, fill: "oklch(0.66 0.02 240)" }} axisLine={false} tickLine={false} />
+            <Tooltip
+              contentStyle={{ background: "oklch(0.17 0.018 240)", border: "1px solid oklch(0.27 0.02 240)", borderRadius: 8, fontSize: 12 }}
+              labelStyle={{ color: "oklch(0.97 0.005 240)" }}
+              formatter={(v: number) => [formatToman(v), "درآمد"]}
+            />
+            <Area type="monotone" dataKey="revenue" stroke="oklch(0.86 0.16 195)" strokeWidth={2} fill="url(#rev)" />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
     </div>
   );
 }

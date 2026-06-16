@@ -26,6 +26,8 @@ export interface PrintParams {
   infillG: number;
   supportG: number;
   unitCostToman?: number;
+  scalePercent?: number;
+  rotation?: { x: number; y: number; z: number };
 }
 
 export interface PublicUser {
@@ -61,6 +63,30 @@ export interface AdminOrderDTO extends OrderDTO {
   hasFile: boolean;
 }
 
+export interface BusinessInfo {
+  name: string;
+  cardNumber: string;
+  cardHolder: string;
+  bankName: string;
+  sheba: string;
+  whatsapp: string;
+  phone: string;
+  address: string;
+}
+
+export interface AppSettings {
+  pricePerGram: number;
+  minOrderToman: number;
+  buildVolume: { x: number; y: number; z: number };
+  business: BusinessInfo;
+}
+
+export interface DailyPoint {
+  day: string; // YYYY-MM-DD
+  revenue: number;
+  count: number;
+}
+
 export interface DashboardStats {
   totalOrders: number;
   todayOrders: number;
@@ -68,4 +94,5 @@ export interface DashboardStats {
   revenueToman: number; // from confirmed/printing/completed orders
   awaitingConfirmation: number; // orders needing the admin's attention
   byStatus: Record<OrderStatus, number>;
+  daily: DailyPoint[]; // last 14 days
 }

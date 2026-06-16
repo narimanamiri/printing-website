@@ -4,7 +4,7 @@ import { db, save, type Order } from "@/lib/server/store";
 import { genId, requireUser } from "@/lib/server/session";
 import { saveFile } from "@/lib/server/files";
 import { toOrderDTO } from "@/lib/server/map";
-import { parseStl, estimatePrint, QUALITY_PRESETS, MATERIALS } from "@/lib/stl-parser";
+import { parseGeometry, statsFromGeometry, estimatePrint, QUALITY_PRESETS, MATERIALS } from "@/lib/stl-parser";
 
 const Fields = z.object({
   filename: z.string().min(1).max(256),
@@ -15,6 +15,10 @@ const Fields = z.object({
   quantity: z.number().int().min(1).max(999),
   color: z.string().max(40).nullable(),
   notes: z.string().max(500).nullable(),
+  scalePercent: z.number().min(10).max(1000),
+  rotX: z.number().min(0).max(360),
+  rotY: z.number().min(0).max(360),
+  rotZ: z.number().min(0).max(360),
 });
 
 function formFile(data: unknown, key: string): File {
@@ -40,6 +44,10 @@ export const createOrder = createServerFn({ method: "POST" })
       quantity: Number(fd.get("quantity") ?? 1),
       color: fd.get("color") ? String(fd.get("color")) : null,
       notes: fd.get("notes") ? String(fd.get("notes")) : null,
+      scalePercent: Number(fd.get("scalePercent") ?? 100),
+      rotX: Number(fd.get("rotX") ?? 0),
+      rotY: Number(fd.get("rotY") ?? 0),
+      rotZ: Number(fd.get("rotZ") ?? 0),
     });
     return { file, ...fields };
   })
@@ -49,12 +57,17 @@ export const createOrder = createServerFn({ method: "POST" })
     if (data.file.size > 60 * 1024 * 1024) throw new Error("حجم فایل بیش از حد است.");
     const buf = new Uint8Array(await data.file.arrayBuffer());
 
-    const stats = await parseStl(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength));
+    // Re-parse and re-orient server-side, then price with the workshop's settings.
+    const geometry = await parseGeometry(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength));
+    const orient = { scale: data.scalePercent / 100, rotXDeg: data.rotX, rotYDeg: data.rotY, rotZDeg: data.rotZ };
+    const stats = statsFromGeometry(geometry, orient);
     if (stats.volumeCm3 <= 0) throw new Error("حجم معتبر محاسبه نشد. آیا مش بسته است؟");
 
+    const settings = db().settings;
     const quality = QUALITY_PRESETS.find((q) => q.key === data.quality) ?? QUALITY_PRESETS[1];
     const est = estimatePrint(stats, {
       quality, infill: data.infill, material: data.material, support: data.support, quantity: data.quantity,
+      pricePerGram: settings.pricePerGram, minOrderToman: settings.minOrderToman, buildVolume: settings.buildVolume,
     });
 
     const filePath = saveFile("uploads", user.id, data.filename, buf);
@@ -85,6 +98,8 @@ export const createOrder = createServerFn({ method: "POST" })
         support: data.support,
         priceFactor: MATERIALS[data.material].priceFactor,
         unitCostToman: est.unitCostToman,
+        scalePercent: data.scalePercent,
+        rotation: { x: data.rotX, y: data.rotY, z: data.rotZ },
         surfaceAreaCm2: Number(stats.surfaceAreaCm2.toFixed(2)),
         bbox: {
           x: Number(stats.bbox.x.toFixed(1)),
@@ -103,6 +118,23 @@ export const createOrder = createServerFn({ method: "POST" })
     db().orders.push(order);
     save();
     return { order: toOrderDTO(order) };
+  });
+
+export const getOrderInvoice = createServerFn({ method: "GET" })
+  .inputValidator((d: unknown) => z.object({ orderId: z.string() }).parse(d))
+  .handler(async ({ data }) => {
+    const user = requireUser();
+    const d = db();
+    const order = d.orders.find((o) => o.id === data.orderId);
+    if (!order) throw new Error("سفارش پیدا نشد.");
+    if (order.userId !== user.id && user.role !== "admin") throw new Error("دسترسی ندارید.");
+    const customer = d.users.find((u) => u.id === order.userId);
+    return {
+      order: toOrderDTO(order),
+      business: d.settings.business,
+      customerName: customer?.fullName ?? "",
+      customerPhone: customer?.phone ?? "",
+    };
   });
 
 export const listMyOrders = createServerFn({ method: "GET" }).handler(async () => {

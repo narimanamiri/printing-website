@@ -1,6 +1,6 @@
 // Offline self-test for the slicer engine. Run with:
 //   node --experimental-strip-types scripts/selftest.ts
-import { parseStl, estimatePrint, fitsBuildVolume, MIN_ORDER_TOMAN, QUALITY_PRESETS, MATERIALS } from "../src/lib/stl-parser.ts";
+import { parseStl, parseGeometry, statsFromGeometry, estimatePrint, fitsBuildVolume, MIN_ORDER_TOMAN, QUALITY_PRESETS, MATERIALS } from "../src/lib/stl-parser.ts";
 
 // Build a binary STL of an axis-aligned cube [0,S]^3 (12 triangles, outward CCW).
 function cubeStl(S: number): ArrayBuffer {
@@ -88,6 +88,23 @@ check("tiny part hits minimum-order floor", tinyEst.costToman === MIN_ORDER_TOMA
 check("20mm cube fits the bed", est.fitsBuildVolume && fitsBuildVolume({ x: 20, y: 20, z: 20 }));
 check("300mm cube does NOT fit", !fitsBuildVolume({ x: 300, y: 50, z: 50 }));
 check("rotation allows a long thin part to fit", fitsBuildVolume({ x: 240, y: 5, z: 5 }));
+
+// Geometry transform: scale & rotation.
+const geo = await parseGeometry(cubeStl(20));
+const base = statsFromGeometry(geo);
+check("statsFromGeometry matches parseStl", Math.abs(base.volumeCm3 - 8) < 0.01 && base.triangles === 12);
+const scaled = statsFromGeometry(geo, { scale: 2, rotXDeg: 0, rotYDeg: 0, rotZDeg: 0 });
+check("scale ×2 → volume ×8", Math.abs(scaled.volumeCm3 - 64) < 0.05, `${scaled.volumeCm3.toFixed(1)} cm³`);
+check("scale ×2 → surface ×4", Math.abs(scaled.surfaceAreaCm2 - 96) < 0.2, `${scaled.surfaceAreaCm2.toFixed(1)} cm²`);
+check("scale ×2 → bbox ×2", Math.abs(scaled.bbox.x - 40) < 0.01);
+const rot = statsFromGeometry(geo, { scale: 1, rotXDeg: 90, rotYDeg: 0, rotZDeg: 0 });
+check("rotation preserves volume", Math.abs(rot.volumeCm3 - 8) < 0.01, `${rot.volumeCm3.toFixed(2)}`);
+check("rotation preserves surface area", Math.abs(rot.surfaceAreaCm2 - 24) < 0.05);
+
+// Configurable price per gram.
+const cheap = estimatePrint(base, { quality: standard, infill: 20, material: "PLA", support: false, pricePerGram: 10000, minOrderToman: 0 });
+const dear = estimatePrint(base, { quality: standard, infill: 20, material: "PLA", support: false, pricePerGram: 60000, minOrderToman: 0 });
+check("6× price-per-gram → ~6× unit cost", Math.abs(dear.unitCostToman / cheap.unitCostToman - 6) < 0.001, `${dear.unitCostToman} vs ${cheap.unitCostToman}`);
 
 console.log(`\n${failures === 0 ? "ALL PASSED ✅" : `${failures} FAILED ❌`}`);
 process.exit(failures === 0 ? 0 : 1);

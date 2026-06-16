@@ -3,9 +3,29 @@
 // Single Node process + synchronous, atomic writes is plenty for a print shop.
 import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync } from "node:fs";
 import { join } from "node:path";
-import type { Role, OrderStatus, PrintParams } from "@/lib/types";
+import type { Role, OrderStatus, PrintParams, AppSettings } from "@/lib/types";
+import { BUSINESS } from "@/lib/business";
+import { PRICE_PER_GRAM_TOMAN, MIN_ORDER_TOMAN, BUILD_VOLUME } from "@/lib/stl-parser";
 
-export type { Role, OrderStatus, PrintParams };
+export type { Role, OrderStatus, PrintParams, AppSettings };
+
+export function defaultSettings(): AppSettings {
+  return {
+    pricePerGram: PRICE_PER_GRAM_TOMAN,
+    minOrderToman: MIN_ORDER_TOMAN,
+    buildVolume: { ...BUILD_VOLUME },
+    business: {
+      name: BUSINESS.name,
+      cardNumber: BUSINESS.cardNumber,
+      cardHolder: BUSINESS.cardHolder,
+      bankName: BUSINESS.bankName,
+      sheba: BUSINESS.sheba,
+      whatsapp: BUSINESS.whatsapp,
+      phone: BUSINESS.phone,
+      address: BUSINESS.address,
+    },
+  };
+}
 
 export interface User {
   id: string;
@@ -49,44 +69,56 @@ interface DbShape {
   users: User[];
   sessions: Session[];
   orders: Order[];
+  settings: AppSettings;
 }
 
 export const DATA_DIR = join(process.cwd(), "data");
 const DB_FILE = join(DATA_DIR, "voxelforge.json");
 const TMP_FILE = join(DATA_DIR, "voxelforge.tmp.json");
 
-let cache: DbShape | null = null;
+// Keep the in-memory cache on globalThis so it stays a true singleton even when
+// the dev server isolates modules or hot-reloads (otherwise writes from one
+// server function wouldn't be seen by another). In production it's just a normal
+// process-wide singleton.
+const GLOBAL_KEY = "__voxelforge_db__";
+const globalStore = globalThis as unknown as { [GLOBAL_KEY]?: DbShape | null };
+function getCache(): DbShape | null { return globalStore[GLOBAL_KEY] ?? null; }
+function setCache(c: DbShape | null) { globalStore[GLOBAL_KEY] = c; }
 
 function ensureDir() {
   if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
 }
 
 function load(): DbShape {
-  if (cache) return cache;
+  const existing = getCache();
+  if (existing) return existing;
   ensureDir();
+  let c: DbShape;
   if (existsSync(DB_FILE)) {
     try {
-      const raw = readFileSync(DB_FILE, "utf8");
-      const parsed = JSON.parse(raw) as Partial<DbShape>;
-      cache = {
+      const parsed = JSON.parse(readFileSync(DB_FILE, "utf8")) as Partial<DbShape>;
+      c = {
         users: parsed.users ?? [],
         sessions: parsed.sessions ?? [],
         orders: parsed.orders ?? [],
+        settings: { ...defaultSettings(), ...parsed.settings },
       };
     } catch {
-      cache = { users: [], sessions: [], orders: [] };
+      c = { users: [], sessions: [], orders: [], settings: defaultSettings() };
     }
   } else {
-    cache = { users: [], sessions: [], orders: [] };
+    c = { users: [], sessions: [], orders: [], settings: defaultSettings() };
   }
-  return cache;
+  setCache(c);
+  return c;
 }
 
 function persist() {
-  if (!cache) return;
+  const c = getCache();
+  if (!c) return;
   ensureDir();
   // Atomic write: temp file then rename, so a crash never corrupts the db.
-  writeFileSync(TMP_FILE, JSON.stringify(cache, null, 2), "utf8");
+  writeFileSync(TMP_FILE, JSON.stringify(c, null, 2), "utf8");
   renameSync(TMP_FILE, DB_FILE);
 }
 
@@ -95,6 +127,19 @@ export function db(): DbShape {
 }
 
 export function save() {
+  persist();
+}
+
+// Restore a backup: replace users/orders/settings, keep current sessions so the
+// admin performing the import stays logged in.
+export function replaceDb(parsed: Partial<DbShape>) {
+  const keepSessions = load().sessions;
+  setCache({
+    users: parsed.users ?? [],
+    sessions: keepSessions,
+    orders: parsed.orders ?? [],
+    settings: { ...defaultSettings(), ...parsed.settings },
+  });
   persist();
 }
 

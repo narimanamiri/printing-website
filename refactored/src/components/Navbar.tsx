@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Boxes, LogOut, Shield, User } from "lucide-react";
+import { Boxes, LogOut, Shield, User, Settings } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 
 export function Navbar() {
@@ -28,6 +28,7 @@ export function Navbar() {
           <Link to="/quote" className="hover:text-foreground transition-colors" activeProps={{ className: "text-foreground" }}>دریافت قیمت</Link>
           {user && <Link to="/orders" className="hover:text-foreground transition-colors" activeProps={{ className: "text-foreground" }}>سفارش‌های من</Link>}
           {isAdmin && <Link to="/admin" className="hover:text-foreground transition-colors flex items-center gap-1.5" activeProps={{ className: "text-foreground" }}><Shield className="size-3.5" />مدیریت</Link>}
+          {isAdmin && <Link to="/settings" className="hover:text-foreground transition-colors flex items-center gap-1.5" activeProps={{ className: "text-foreground" }}><Settings className="size-3.5" />تنظیمات</Link>}
         </nav>
 
         <div className="flex items-center gap-3">

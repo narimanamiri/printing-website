@@ -9,13 +9,20 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as QuoteRouteImport } from './routes/quote'
 import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as OrdersRouteImport } from './routes/orders'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as InvoiceOrderIdRouteImport } from './routes/invoice.$orderId'
 
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const QuoteRoute = QuoteRouteImport.update({
   id: '/quote',
   path: '/quote',
@@ -46,6 +53,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const InvoiceOrderIdRoute = InvoiceOrderIdRouteImport.update({
+  id: '/invoice/$orderId',
+  path: '/invoice/$orderId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -54,6 +66,8 @@ export interface FileRoutesByFullPath {
   '/orders': typeof OrdersRoute
   '/profile': typeof ProfileRoute
   '/quote': typeof QuoteRoute
+  '/settings': typeof SettingsRoute
+  '/invoice/$orderId': typeof InvoiceOrderIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -62,6 +76,8 @@ export interface FileRoutesByTo {
   '/orders': typeof OrdersRoute
   '/profile': typeof ProfileRoute
   '/quote': typeof QuoteRoute
+  '/settings': typeof SettingsRoute
+  '/invoice/$orderId': typeof InvoiceOrderIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -71,13 +87,40 @@ export interface FileRoutesById {
   '/orders': typeof OrdersRoute
   '/profile': typeof ProfileRoute
   '/quote': typeof QuoteRoute
+  '/settings': typeof SettingsRoute
+  '/invoice/$orderId': typeof InvoiceOrderIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/admin' | '/auth' | '/orders' | '/profile' | '/quote'
+  fullPaths:
+    | '/'
+    | '/admin'
+    | '/auth'
+    | '/orders'
+    | '/profile'
+    | '/quote'
+    | '/settings'
+    | '/invoice/$orderId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/admin' | '/auth' | '/orders' | '/profile' | '/quote'
-  id: '__root__' | '/' | '/admin' | '/auth' | '/orders' | '/profile' | '/quote'
+  to:
+    | '/'
+    | '/admin'
+    | '/auth'
+    | '/orders'
+    | '/profile'
+    | '/quote'
+    | '/settings'
+    | '/invoice/$orderId'
+  id:
+    | '__root__'
+    | '/'
+    | '/admin'
+    | '/auth'
+    | '/orders'
+    | '/profile'
+    | '/quote'
+    | '/settings'
+    | '/invoice/$orderId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -87,10 +130,19 @@ export interface RootRouteChildren {
   OrdersRoute: typeof OrdersRoute
   ProfileRoute: typeof ProfileRoute
   QuoteRoute: typeof QuoteRoute
+  SettingsRoute: typeof SettingsRoute
+  InvoiceOrderIdRoute: typeof InvoiceOrderIdRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/quote': {
       id: '/quote'
       path: '/quote'
@@ -133,6 +185,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/invoice/$orderId': {
+      id: '/invoice/$orderId'
+      path: '/invoice/$orderId'
+      fullPath: '/invoice/$orderId'
+      preLoaderRoute: typeof InvoiceOrderIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -143,6 +202,8 @@ const rootRouteChildren: RootRouteChildren = {
   OrdersRoute: OrdersRoute,
   ProfileRoute: ProfileRoute,
   QuoteRoute: QuoteRoute,
+  SettingsRoute: SettingsRoute,
+  InvoiceOrderIdRoute: InvoiceOrderIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
