@@ -38,8 +38,12 @@ function readGeometry(buffer: ArrayBuffer): Float32Array | null {
 
 interface Prepared {
   tris: Float32Array; // centered + scaled, possibly sampled
+  overhang: Uint8Array; // 1 = face needs support (steep down-facing in print)
   count: number;
 }
+
+// Same overhang rule as the slicer engine (normal tilts >30° below horizontal).
+const OVERHANG_NZ = -0.5;
 
 function prepare(raw: Float32Array): Prepared | null {
   const total = raw.length / 9;
@@ -47,6 +51,7 @@ function prepare(raw: Float32Array): Prepared | null {
 
   let minX = Infinity, minY = Infinity, minZ = Infinity;
   let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+  let signedVol = 0;
   for (let i = 0; i < raw.length; i += 3) {
     const x = raw[i], y = raw[i + 1], z = raw[i + 2];
     if (x < minX) minX = x; if (x > maxX) maxX = x;
@@ -60,9 +65,23 @@ function prepare(raw: Float32Array): Prepared | null {
   const step = total > MAX_RENDER_TRIS ? Math.ceil(total / MAX_RENDER_TRIS) : 1;
   const count = Math.ceil(total / step);
   const tris = new Float32Array(count * 9);
-  let w = 0;
+  const nz = new Float32Array(count); // per-face model-space unit normal z
+  let w = 0, f = 0;
   for (let t = 0; t < total; t += step) {
     const b = t * 9;
+    // model-space normal z (before axis remap), for overhang detection
+    const ax = raw[b], ay = raw[b + 1], az = raw[b + 2];
+    const bx = raw[b + 3], by = raw[b + 4], bz = raw[b + 5];
+    const ccx = raw[b + 6], ccy = raw[b + 7], ccz = raw[b + 8];
+    const e1x = bx - ax, e1y = by - ay, e1z = bz - az;
+    const e2x = ccx - ax, e2y = ccy - ay, e2z = ccz - az;
+    const nX = e1y * e2z - e1z * e2y;
+    const nY = e1z * e2x - e1x * e2z;
+    const nZ = e1x * e2y - e1y * e2x;
+    const nl = Math.hypot(nX, nY, nZ) || 1;
+    nz[f++] = nZ / nl;
+    signedVol += (ax * (by * ccz - ccy * bz) - bx * (ay * ccz - ccy * az) + ccx * (ay * bz - by * az));
+
     for (let v = 0; v < 3; v++) {
       // map model axes → view: STL Z is up, we keep Y up on screen so swap.
       tris[w++] = (raw[b + v * 3] - cx) * scale;
@@ -70,10 +89,17 @@ function prepare(raw: Float32Array): Prepared | null {
       tris[w++] = (raw[b + v * 3 + 1] - cy) * scale;
     }
   }
-  return { tris, count };
+  // Flip if winding is inverted so "down-facing" is meaningful.
+  const flip = signedVol < 0 ? -1 : 1;
+  const overhang = new Uint8Array(count);
+  for (let i = 0; i < count; i++) overhang[i] = nz[i] * flip < OVERHANG_NZ ? 1 : 0;
+
+  return { tris, overhang, count };
 }
 
-export function StlViewer({ file }: { file: File | null }) {
+export function StlViewer({ file, highlightOverhang = true }: { file: File | null; highlightOverhang?: boolean }) {
+  const overhangRef = useRef(highlightOverhang);
+  overhangRef.current = highlightOverhang;
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const prepRef = useRef<Prepared | null>(null);
   const rotRef = useRef({ x: -0.5, y: 0.6 });
@@ -124,13 +150,14 @@ export function StlViewer({ file }: { file: File | null }) {
 
       const R = Math.min(w, h) * 0.42;
       const ox = w / 2, oy = h / 2;
-      const { tris, count } = prep;
+      const { tris, count, overhang } = prep;
 
       // light direction
       const lx = 0.4, ly = 0.5, lz = 0.75;
 
-      type Face = { z: number; px: number[]; py: number[]; shade: number };
+      type Face = { z: number; px: number[]; py: number[]; shade: number; over: boolean };
       const faces: Face[] = [];
+      const showOver = overhangRef.current;
 
       for (let i = 0; i < count; i++) {
         const b = i * 9;
@@ -160,15 +187,24 @@ export function StlViewer({ file }: { file: File | null }) {
           px: [ox + vx[0] * R, ox + vx[1] * R, ox + vx[2] * R],
           py: [oy - vy[0] * R, oy - vy[1] * R, oy - vy[2] * R],
           shade,
+          over: showOver && overhang[i] === 1,
         });
       }
 
       faces.sort((a, b) => a.z - b.z); // far → near
       for (const f of faces) {
-        // neon-cyan tinted material
-        const r = Math.round(40 + f.shade * 60);
-        const g = Math.round(150 + f.shade * 105);
-        const bl = Math.round(170 + f.shade * 85);
+        let r: number, g: number, bl: number;
+        if (f.over) {
+          // amber/red highlight for overhang faces that need support
+          r = Math.round(210 + f.shade * 45);
+          g = Math.round(70 + f.shade * 60);
+          bl = Math.round(30 + f.shade * 30);
+        } else {
+          // neon-cyan tinted material
+          r = Math.round(40 + f.shade * 60);
+          g = Math.round(150 + f.shade * 105);
+          bl = Math.round(170 + f.shade * 85);
+        }
         ctx.fillStyle = `rgb(${r},${g},${bl})`;
         ctx.strokeStyle = ctx.fillStyle;
         ctx.lineWidth = 0.6;
@@ -222,6 +258,11 @@ export function StlViewer({ file }: { file: File | null }) {
             <Move3d className="size-8 mx-auto mb-3 opacity-60" />
             پیش‌نمایش سه‌بعدی مدل شما اینجا نمایش داده می‌شود
           </div>
+        </div>
+      )}
+      {ready && highlightOverhang && (
+        <div className="absolute top-2 right-2 flex items-center gap-1.5 text-[10px] text-muted-foreground font-mono pointer-events-none bg-background/60 backdrop-blur px-2 py-1 rounded-md">
+          <span className="size-2 rounded-sm" style={{ background: "rgb(230,100,50)" }} /> نیازمند ساپورت
         </div>
       )}
       {ready && (

@@ -131,6 +131,13 @@ function OrderCard({ order, highlighted, onChanged }: { order: OrderDTO; highlig
         <Stat label="هزینه" value={formatToman(order.costToman)} highlight />
       </div>
 
+      {(order.quantity > 1 || order.color) && (
+        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground font-mono">
+          {order.quantity > 1 && <span>📦 {formatNumberFa(order.quantity)} عدد</span>}
+          {order.color && <span>🎨 {order.color}</span>}
+        </div>
+      )}
+
       {pp && (
         <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground font-mono">
           {pp.printTimeMin != null && <span>⏱ {formatDurationFa(pp.printTimeMin)}</span>}

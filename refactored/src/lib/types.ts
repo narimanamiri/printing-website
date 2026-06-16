@@ -25,6 +25,7 @@ export interface PrintParams {
   shellG: number;
   infillG: number;
   supportG: number;
+  unitCostToman?: number;
 }
 
 export interface PublicUser {
@@ -43,6 +44,7 @@ export interface OrderDTO {
   infill: number;
   material: string;
   color: string | null;
+  quantity: number;
   costToman: number;
   status: OrderStatus;
   hasReceipt: boolean;

@@ -35,6 +35,7 @@ export interface Order {
   infill: number;
   material: string;
   color: string | null;
+  quantity: number;
   notes: string | null;
   adminNotes: string | null;
   costToman: number;

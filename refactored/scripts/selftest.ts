@@ -1,6 +1,6 @@
 // Offline self-test for the slicer engine. Run with:
 //   node --experimental-strip-types scripts/selftest.ts
-import { parseStl, estimatePrint, QUALITY_PRESETS, MATERIALS } from "../src/lib/stl-parser.ts";
+import { parseStl, estimatePrint, fitsBuildVolume, MIN_ORDER_TOMAN, QUALITY_PRESETS, MATERIALS } from "../src/lib/stl-parser.ts";
 
 // Build a binary STL of an axis-aligned cube [0,S]^3 (12 triangles, outward CCW).
 function cubeStl(S: number): ArrayBuffer {
@@ -71,6 +71,23 @@ check("100% infill ≈ solid cube mass (~9.9 g)", Math.abs(solid.weightG - 8 * M
 // Material density affects weight.
 const petg = estimatePrint(stats, { quality: standard, infill: 20, material: "PETG", support: false });
 check("PETG differs from PLA", Math.abs(petg.weightG - est.weightG) > 0.01);
+
+// Quantity scales totals linearly.
+const q3 = estimatePrint(stats, { quality: standard, infill: 20, material: "PLA", support: false, quantity: 3 });
+check("quantity=3 triples weight", Math.abs(q3.weightG - est.weightG * 3) < 0.01, `${q3.weightG.toFixed(2)} g`);
+check("quantity=3 total = 3 × unit cost", q3.costToman === est.unitCostToman * 3, `${q3.costToman}`);
+check("unit cost matches single order", est.unitCostToman === est.costToman);
+
+// Minimum-order floor on a tiny part.
+const tiny = await parseStl(cubeStl(3));
+const tinyEst = estimatePrint(tiny, { quality: standard, infill: 20, material: "PLA", support: false });
+check("tiny part hits minimum-order floor", tinyEst.costToman === MIN_ORDER_TOMAN && tinyEst.minApplied,
+  `${tinyEst.costToman} (raw unit ${tinyEst.unitCostToman})`);
+
+// Build-volume fit check.
+check("20mm cube fits the bed", est.fitsBuildVolume && fitsBuildVolume({ x: 20, y: 20, z: 20 }));
+check("300mm cube does NOT fit", !fitsBuildVolume({ x: 300, y: 50, z: 50 }));
+check("rotation allows a long thin part to fit", fitsBuildVolume({ x: 240, y: 5, z: 5 }));
 
 console.log(`\n${failures === 0 ? "ALL PASSED ✅" : `${failures} FAILED ❌`}`);
 process.exit(failures === 0 ? 0 : 1);

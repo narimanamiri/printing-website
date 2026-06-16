@@ -10,6 +10,7 @@ export function toOrderDTO(o: Order): OrderDTO {
     infill: o.infill,
     material: o.material,
     color: o.color,
+    quantity: o.quantity ?? 1,
     costToman: o.costToman,
     status: o.status,
     hasReceipt: !!o.receiptPath,

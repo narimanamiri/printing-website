@@ -8,7 +8,7 @@ import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { useAuth } from "@/hooks/use-auth";
 import { formatToman, formatNumberFa, formatDurationFa } from "@/lib/stl-parser";
-import { listOrders, confirmOrderPayment, setOrderStatus, getOrderFile } from "@/lib/admin.functions";
+import { listOrders, confirmOrderPayment, setOrderStatus, setAdminNotes, getOrderFile } from "@/lib/admin.functions";
 import type { AdminOrderDTO } from "@/lib/types";
 
 export const Route = createFileRoute("/admin")({
@@ -140,7 +140,11 @@ function AdminPage() {
                   </div>
                   <div className="text-right">
                     <div className="text-lg font-bold text-gradient">{formatToman(o.costToman)}</div>
-                    <div className="text-xs text-muted-foreground">{formatNumberFa(o.weightG, 1)} گرم · {o.material} · {formatNumberFa(o.infill)}٪</div>
+                    <div className="text-xs text-muted-foreground">
+                      {formatNumberFa(o.weightG, 1)} گرم · {o.material} · {formatNumberFa(o.infill)}٪
+                      {o.quantity > 1 && ` · ${formatNumberFa(o.quantity)} عدد`}
+                      {o.color && ` · ${o.color}`}
+                    </div>
                   </div>
                 </div>
 
@@ -154,7 +158,9 @@ function AdminPage() {
                   </div>
                 )}
 
-                {o.notes && <p className="mt-3 text-xs text-muted-foreground border-r-2 border-border pr-3">{o.notes}</p>}
+                {o.notes && <p className="mt-3 text-xs text-muted-foreground border-r-2 border-border pr-3">یادداشت مشتری: {o.notes}</p>}
+
+                <AdminNoteBox orderId={o.id} initial={o.adminNotes ?? ""} />
 
                 <div className="mt-5 pt-4 border-t border-border flex flex-wrap items-center gap-2">
                   {o.hasFile && (
@@ -195,6 +201,39 @@ function AdminPage() {
         )}
       </main>
       <Footer />
+    </div>
+  );
+}
+
+function AdminNoteBox({ orderId, initial }: { orderId: string; initial: string }) {
+  const [value, setValue] = useState(initial);
+  const [saving, setSaving] = useState(false);
+  const saveFn = useServerFn(setAdminNotes);
+  const dirty = value !== initial;
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await saveFn({ data: { orderId, notes: value } });
+      toast.success("یادداشت ذخیره شد");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "خطا در ذخیره");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="mt-3 flex items-center gap-2">
+      <input
+        value={value} onChange={(e) => setValue(e.target.value)} maxLength={500}
+        placeholder="یادداشت به مشتری (اختیاری)…"
+        className="flex-1 rounded-md border border-border bg-input px-3 py-1.5 text-xs outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
+      />
+      <button onClick={save} disabled={!dirty || saving}
+        className="text-xs px-3 py-1.5 rounded-md btn-primary disabled:opacity-40 disabled:cursor-not-allowed">
+        {saving ? "…" : "ذخیره"}
+      </button>
     </div>
   );
 }

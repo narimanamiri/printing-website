@@ -12,6 +12,8 @@ const Fields = z.object({
   material: z.enum(["PLA", "PETG", "ABS", "TPU", "Resin"]),
   quality: z.enum(["draft", "standard", "fine"]),
   support: z.boolean(),
+  quantity: z.number().int().min(1).max(999),
+  color: z.string().max(40).nullable(),
   notes: z.string().max(500).nullable(),
 });
 
@@ -35,6 +37,8 @@ export const createOrder = createServerFn({ method: "POST" })
       material: String(fd.get("material")),
       quality: String(fd.get("quality")),
       support: fd.get("support") === "true",
+      quantity: Number(fd.get("quantity") ?? 1),
+      color: fd.get("color") ? String(fd.get("color")) : null,
       notes: fd.get("notes") ? String(fd.get("notes")) : null,
     });
     return { file, ...fields };
@@ -50,7 +54,7 @@ export const createOrder = createServerFn({ method: "POST" })
 
     const quality = QUALITY_PRESETS.find((q) => q.key === data.quality) ?? QUALITY_PRESETS[1];
     const est = estimatePrint(stats, {
-      quality, infill: data.infill, material: data.material, support: data.support,
+      quality, infill: data.infill, material: data.material, support: data.support, quantity: data.quantity,
     });
 
     const filePath = saveFile("uploads", user.id, data.filename, buf);
@@ -66,7 +70,8 @@ export const createOrder = createServerFn({ method: "POST" })
       weightG: Number(est.weightG.toFixed(3)),
       infill: data.infill,
       material: data.material,
-      color: null,
+      color: data.color,
+      quantity: data.quantity,
       notes: data.notes,
       adminNotes: null,
       costToman: est.costToman,
@@ -79,6 +84,7 @@ export const createOrder = createServerFn({ method: "POST" })
         bottomLayers: quality.bottomLayers,
         support: data.support,
         priceFactor: MATERIALS[data.material].priceFactor,
+        unitCostToman: est.unitCostToman,
         surfaceAreaCm2: Number(stats.surfaceAreaCm2.toFixed(2)),
         bbox: {
           x: Number(stats.bbox.x.toFixed(1)),

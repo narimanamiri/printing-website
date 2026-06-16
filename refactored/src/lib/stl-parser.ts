@@ -218,32 +218,49 @@ const SUPPORT_DENSITY = 0.15;
 const SUPPORT_HEIGHT_FRACTION = 0.5; // supports span ~half the height under an overhang
 
 export const PRICE_PER_GRAM_TOMAN = 30000;
+// Minimum charge per order (setup/handling) — tiny parts can't cost peanuts.
+export const MIN_ORDER_TOMAN = 50000;
+// The workshop's printable build volume in mm (an i3-class machine).
+export const BUILD_VOLUME = { x: 250, y: 210, z: 210 };
+
+// Does the part fit on the bed (allowing free rotation)? Compares sorted dims.
+export function fitsBuildVolume(bbox: { x: number; y: number; z: number }): boolean {
+  const m = [bbox.x, bbox.y, bbox.z].sort((a, b) => a - b);
+  const b = [BUILD_VOLUME.x, BUILD_VOLUME.y, BUILD_VOLUME.z].sort((a, b) => a - b);
+  return m[0] <= b[0] && m[1] <= b[1] && m[2] <= b[2];
+}
 
 export interface PrintSettings {
   quality: QualityPreset;
   infill: number; // 0–100
   material: MaterialKey;
   support: boolean;
+  quantity?: number; // number of copies (default 1)
 }
 
 export interface PrintEstimate {
-  weightG: number;
-  filamentLengthM: number;
-  printTimeMin: number;
-  costToman: number;
+  weightG: number; // total for all copies
+  filamentLengthM: number; // total
+  printTimeMin: number; // total
+  costToman: number; // total (after minimum-order floor)
+  unitCostToman: number; // price of a single copy (before floor)
+  quantity: number;
+  minApplied: boolean; // true if the minimum-order floor was applied
+  fitsBuildVolume: boolean;
   needsSupport: boolean;
   breakdown: {
-    shellG: number; // walls + top/bottom skin
-    infillG: number;
-    supportG: number;
+    shellG: number; // walls + top/bottom skin (total)
+    infillG: number; // total
+    supportG: number; // total
   };
-  volumeUsedCm3: number; // material volume actually extruded
+  volumeUsedCm3: number; // material volume actually extruded (total)
 }
 
 // The core estimator. Pure function — recompute live as the user tweaks settings.
 export function estimatePrint(stats: StlStats, s: PrintSettings): PrintEstimate {
   const mat = MATERIALS[s.material] ?? MATERIALS.PLA;
   const q = s.quality;
+  const qty = Math.max(1, Math.floor(s.quantity ?? 1));
 
   const wallThicknessCm = (q.wallCount * LINE_WIDTH) / 10; // mm → cm
   const skinThicknessCm = (((q.topLayers + q.bottomLayers) / 2) * q.layerHeight) / 10;
@@ -262,13 +279,14 @@ export function estimatePrint(stats: StlStats, s: PrintSettings): PrintEstimate 
     ? stats.overhangAreaCm2 * bboxZcm * SUPPORT_HEIGHT_FRACTION * SUPPORT_DENSITY
     : 0;
 
-  const shellG = shellVolCm3 * mat.density;
-  const infillG = infillVolCm3 * mat.density;
-  const supportG = supportVolCm3 * mat.density;
+  // Per-unit masses, then scale everything by the number of copies.
+  const shellG = shellVolCm3 * mat.density * qty;
+  const infillG = infillVolCm3 * mat.density * qty;
+  const supportG = supportVolCm3 * mat.density * qty;
   const weightG = shellG + infillG + supportG;
 
   // Filament length (exact for a given extruded volume).
-  const usedCm3 = shellVolCm3 + infillVolCm3 + supportVolCm3;
+  const usedCm3 = (shellVolCm3 + infillVolCm3 + supportVolCm3) * qty;
   const filamentAreaCm2 = Math.PI * (FILAMENT_DIAMETER / 20) ** 2; // (d/2 mm → cm)²·π
   const filamentLengthM = filamentAreaCm2 > 0 ? usedCm3 / filamentAreaCm2 / 100 : 0;
 
@@ -276,13 +294,20 @@ export function estimatePrint(stats: StlStats, s: PrintSettings): PrintEstimate 
   const flowMm3PerS = PRINT_SPEED * LINE_WIDTH * q.layerHeight; // mm³/s
   const printTimeMin = flowMm3PerS > 0 ? (usedCm3 * 1000) / flowMm3PerS / 60 / TIME_EFFICIENCY : 0;
 
-  const costToman = Math.ceil(weightG * PRICE_PER_GRAM_TOMAN * mat.priceFactor);
+  const unitWeightG = weightG / qty;
+  const unitCostToman = Math.ceil(unitWeightG * PRICE_PER_GRAM_TOMAN * mat.priceFactor);
+  const rawCost = unitCostToman * qty;
+  const costToman = Math.max(rawCost, MIN_ORDER_TOMAN);
 
   return {
     weightG,
     filamentLengthM,
     printTimeMin,
     costToman,
+    unitCostToman,
+    quantity: qty,
+    minApplied: costToman > rawCost,
+    fitsBuildVolume: fitsBuildVolume(stats.bbox),
     needsSupport,
     breakdown: { shellG, infillG, supportG },
     volumeUsedCm3: usedCm3,

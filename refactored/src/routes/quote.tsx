@@ -39,6 +39,8 @@ function QuotePage() {
   const [infill, setInfill] = useState(20);
   const [material, setMaterial] = useState<MaterialKey>("PLA");
   const [support, setSupport] = useState(false);
+  const [quantity, setQuantity] = useState(1);
+  const [color, setColor] = useState("");
   const [notes, setNotes] = useState("");
   const [advanced, setAdvanced] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -48,8 +50,8 @@ function QuotePage() {
     [qualityKey],
   );
   const est = useMemo(
-    () => (stats ? estimatePrint(stats, { quality, infill, material, support }) : null),
-    [stats, quality, infill, material, support],
+    () => (stats ? estimatePrint(stats, { quality, infill, material, support, quantity }) : null),
+    [stats, quality, infill, material, support, quantity],
   );
 
   const handleFile = async (f: File) => {
@@ -90,6 +92,8 @@ function QuotePage() {
       fd.append("material", material);
       fd.append("quality", quality.key);
       fd.append("support", String(support));
+      fd.append("quantity", String(quantity));
+      if (color) fd.append("color", color);
       if (notes) fd.append("notes", notes);
 
       const res = await createOrderFn({ data: fd });
@@ -127,6 +131,12 @@ function QuotePage() {
             )}
 
             {(file || parsing) && <StlViewer file={file} />}
+            {est && !est.fitsBuildVolume && (
+              <div className="flex items-start gap-2 text-sm text-warning bg-warning/10 border border-warning/30 rounded-lg p-3">
+                <AlertCircle className="size-4 shrink-0 mt-0.5" />
+                ابعاد این مدل از حجم چاپ پرینتر ({formatNumberFa(250)}×{formatNumberFa(210)}×{formatNumberFa(210)} میلی‌متر) بزرگ‌تر است؛ شاید لازم باشد مدل تکه‌تکه چاپ شود. برای بررسی با ما تماس بگیرید.
+              </div>
+            )}
 
             <div className="surface rounded-2xl p-6 space-y-5">
               {/* Quality preset */}
@@ -167,6 +177,28 @@ function QuotePage() {
                   className="w-full mt-3 accent-[oklch(0.86_0.16_195)]" />
                 <div className="flex justify-between text-[10px] text-muted-foreground font-mono mt-1">
                   <span>سبک · ارزان‌تر</span><span>توپر · مقاوم‌تر</span>
+                </div>
+              </div>
+
+              {/* Quantity + color */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">تعداد</label>
+                  <div className="mt-2 flex items-center rounded-lg border border-border overflow-hidden">
+                    <button type="button" onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                      className="px-3 py-2 text-lg hover:bg-secondary transition-colors">−</button>
+                    <input type="number" min={1} max={999} value={quantity}
+                      onChange={(e) => setQuantity(Math.max(1, Math.min(999, Number(e.target.value) || 1)))}
+                      className="flex-1 w-full text-center bg-transparent outline-none font-mono text-sm" />
+                    <button type="button" onClick={() => setQuantity((q) => Math.min(999, q + 1))}
+                      className="px-3 py-2 text-lg hover:bg-secondary transition-colors">+</button>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">رنگ (اختیاری)</label>
+                  <input type="text" value={color} onChange={(e) => setColor(e.target.value)} maxLength={40}
+                    placeholder="مثلاً مشکی، قرمز…"
+                    className="mt-2 w-full rounded-lg border border-border bg-input px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/30" />
                 </div>
               </div>
 
@@ -224,8 +256,15 @@ function QuotePage() {
               <div className="text-xs uppercase tracking-widest text-accent font-mono mb-2">قیمت زنده</div>
               <div className="text-4xl font-bold tracking-tight">{est ? formatToman(est.costToman) : "—"}</div>
               <div className="text-sm text-muted-foreground mt-1">
-                {est ? `${formatNumberFa(est.weightG, 1)} گرم فیلامنت مصرفی` : "برای دیدن قیمت یک فایل STL آپلود کنید"}
+                {est
+                  ? est.quantity > 1
+                    ? `${formatNumberFa(est.quantity)} عدد × ${formatToman(est.unitCostToman)} · ${formatNumberFa(est.weightG, 1)} گرم`
+                    : `${formatNumberFa(est.weightG, 1)} گرم فیلامنت مصرفی`
+                  : "برای دیدن قیمت یک فایل STL آپلود کنید"}
               </div>
+              {est?.minApplied && (
+                <div className="mt-2 text-[11px] text-accent">حداقل مبلغ سفارش {formatToman(50000)} اعمال شد.</div>
+              )}
 
               {est && (
                 <div className="mt-5 grid grid-cols-2 gap-3">
