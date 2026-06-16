@@ -12,7 +12,7 @@ import {
   MATERIALS, QUALITY_PRESETS, type StlStats, type MaterialKey,
 } from "@/lib/stl-parser";
 import { createOrder } from "@/lib/orders.functions";
-import { supabase } from "@/integrations/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
 
 export const Route = createFileRoute("/quote")({
   head: () => ({
@@ -27,6 +27,7 @@ export const Route = createFileRoute("/quote")({
 function QuotePage() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const qc = useQueryClient();
   const createOrderFn = useServerFn(createOrder);
 
   const [file, setFile] = useState<File | null>(null);
@@ -80,27 +81,22 @@ function QuotePage() {
     if (!file || !stats || !est) return;
     setSubmitting(true);
     try {
-      const safeName = file.name.replace(/[^\w.-]+/g, "_");
-      const path = `${user.id}/${Date.now()}_${safeName}`;
-      const { error: upErr } = await supabase.storage
-        .from("stl-uploads").upload(path, file, { contentType: "model/stl" });
-      if (upErr) throw upErr;
+      // Send the STL to the local server, which re-slices it and writes the
+      // trusted price. The browser price is only a live preview.
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("filename", file.name);
+      fd.append("infill", String(infill));
+      fd.append("material", material);
+      fd.append("quality", quality.key);
+      fd.append("support", String(support));
+      if (notes) fd.append("notes", notes);
 
-      // Server re-slices & writes the trusted price — client price is a preview.
-      const res = await createOrderFn({
-        data: {
-          filePath: path,
-          filename: file.name,
-          infill,
-          material,
-          quality: quality.key as "draft" | "standard" | "fine",
-          support,
-          notes: notes || null,
-        },
-      });
+      const res = await createOrderFn({ data: fd });
+      await qc.invalidateQueries({ queryKey: ["my-orders"] });
 
       toast.success("سفارش ثبت شد. حالا رسید پرداخت را آپلود کنید.");
-      navigate({ to: "/orders", search: { highlight: res.id } });
+      navigate({ to: "/orders", search: { highlight: res.order.id } });
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "ثبت سفارش ناموفق بود");
     } finally {

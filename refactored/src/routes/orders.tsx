@@ -1,14 +1,16 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { Upload, Loader2, FileBox, Clock, Check, Hammer, PackageCheck, XCircle, AlertCircle, Copy, CreditCard } from "lucide-react";
 import { toast } from "sonner";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { useAuth } from "@/hooks/use-auth";
-import { supabase } from "@/integrations/supabase/client";
+import { listMyOrders, uploadReceipt } from "@/lib/orders.functions";
 import { formatToman, formatNumberFa, formatDurationFa } from "@/lib/stl-parser";
 import { BUSINESS } from "@/lib/business";
+import type { OrderDTO } from "@/lib/types";
 
 export const Route = createFileRoute("/orders")({
   head: () => ({
@@ -23,30 +25,6 @@ export const Route = createFileRoute("/orders")({
   component: OrdersPage,
 });
 
-type PrintParams = {
-  layerHeight?: number;
-  walls?: number;
-  filamentLengthM?: number;
-  printTimeMin?: number;
-  bbox?: { x: number; y: number; z: number };
-  support?: boolean;
-} | null;
-
-type Order = {
-  id: string;
-  filename: string;
-  weight_g: number;
-  infill: number;
-  material: string;
-  cost_toman: number;
-  status: string;
-  receipt_path: string | null;
-  notes: string | null;
-  admin_notes: string | null;
-  print_params: PrintParams;
-  created_at: string;
-};
-
 function OrdersPage() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
@@ -60,13 +38,7 @@ function OrdersPage() {
   const { data: orders, isLoading } = useQuery({
     queryKey: ["my-orders", user?.id],
     enabled: !!user,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("orders").select("*")
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data as Order[];
-    },
+    queryFn: async () => (await listMyOrders()).orders,
   });
 
   return (
@@ -93,7 +65,7 @@ function OrdersPage() {
         ) : (
           <div className="space-y-4">
             {orders.map((o) => (
-              <OrderCard key={o.id} order={o} userId={user!.id} highlighted={o.id === highlight} onChanged={() => qc.invalidateQueries({ queryKey: ["my-orders"] })} />
+              <OrderCard key={o.id} order={o} highlighted={o.id === highlight} onChanged={() => qc.invalidateQueries({ queryKey: ["my-orders"] })} />
             ))}
           </div>
         )}
@@ -112,23 +84,20 @@ const STATUS_META: Record<string, { label: string; icon: typeof Clock; color: st
   cancelled: { label: "لغو شده", icon: XCircle, color: "text-destructive" },
 };
 
-function OrderCard({ order, userId, highlighted, onChanged }: { order: Order; userId: string; highlighted?: boolean; onChanged: () => void }) {
+function OrderCard({ order, highlighted, onChanged }: { order: OrderDTO; highlighted?: boolean; onChanged: () => void }) {
   const [uploading, setUploading] = useState(false);
+  const uploadReceiptFn = useServerFn(uploadReceipt);
   const meta = STATUS_META[order.status] ?? STATUS_META.pending_payment;
   const Icon = meta.icon;
-  const pp = order.print_params;
+  const pp = order.printParams;
 
-  const uploadReceipt = async (file: File) => {
+  const doUpload = async (file: File) => {
     setUploading(true);
     try {
-      const path = `${userId}/${order.id}_${Date.now()}_${file.name}`;
-      const { error: upErr } = await supabase.storage
-        .from("payment-receipts").upload(path, file);
-      if (upErr) throw upErr;
-      const { error: updErr } = await supabase.from("orders")
-        .update({ receipt_path: path, status: "awaiting_confirmation" })
-        .eq("id", order.id);
-      if (updErr) throw updErr;
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("orderId", order.id);
+      await uploadReceiptFn({ data: fd });
       toast.success("رسید آپلود شد. به‌زودی تأیید می‌کنیم.");
       onChanged();
     } catch (err: unknown) {
@@ -147,7 +116,7 @@ function OrderCard({ order, userId, highlighted, onChanged }: { order: Order; us
             <span className="font-semibold truncate">{order.filename}</span>
           </div>
           <div className="text-xs text-muted-foreground font-mono mt-1">
-            #{order.id.slice(0, 8)} · {new Date(order.created_at).toLocaleString("fa-IR")}
+            #{order.id.slice(0, 8)} · {new Date(order.createdAt).toLocaleString("fa-IR")}
           </div>
         </div>
         <div className={`flex items-center gap-1.5 text-sm ${meta.color} font-medium`}>
@@ -158,8 +127,8 @@ function OrderCard({ order, userId, highlighted, onChanged }: { order: Order; us
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-5 text-sm">
         <Stat label="متریال" value={order.material} />
         <Stat label="اینفیل" value={`${formatNumberFa(order.infill)}٪`} />
-        <Stat label="وزن" value={`${formatNumberFa(Number(order.weight_g), 1)} گرم`} />
-        <Stat label="هزینه" value={formatToman(order.cost_toman)} highlight />
+        <Stat label="وزن" value={`${formatNumberFa(order.weightG, 1)} گرم`} />
+        <Stat label="هزینه" value={formatToman(order.costToman)} highlight />
       </div>
 
       {pp && (
@@ -173,10 +142,10 @@ function OrderCard({ order, userId, highlighted, onChanged }: { order: Order; us
       )}
 
       {order.notes && <p className="mt-4 text-xs text-muted-foreground border-r-2 border-border pr-3">{order.notes}</p>}
-      {order.admin_notes && <p className="mt-3 text-xs text-primary border-r-2 border-primary pr-3">از کارگاه: {order.admin_notes}</p>}
+      {order.adminNotes && <p className="mt-3 text-xs text-primary border-r-2 border-primary pr-3">از کارگاه: {order.adminNotes}</p>}
 
       {order.status === "pending_payment" && (
-        <PaymentBlock amount={order.cost_toman} uploading={uploading} onUpload={uploadReceipt} />
+        <PaymentBlock amount={order.costToman} uploading={uploading} onUpload={doUpload} />
       )}
 
       {order.status === "awaiting_confirmation" && (
@@ -190,11 +159,10 @@ function OrderCard({ order, userId, highlighted, onChanged }: { order: Order; us
 
 function PaymentBlock({ amount, uploading, onUpload }: { amount: number; uploading: boolean; onUpload: (f: File) => void }) {
   const copy = (text: string, label: string) => {
-    navigator.clipboard.writeText(text.replace(/[-\s]/g, ""));
+    navigator.clipboard?.writeText(text.replace(/[-\s]/g, ""));
     toast.success(`${label} کپی شد`);
   };
 
-  // Convert latin digits to persian for display only
   const toFa = (s: string) => s.replace(/[0-9]/g, (d) => "۰۱۲۳۴۵۶۷۸۹"[+d]);
   const cardGroups = BUSINESS.cardNumber.replace(/\D/g, "").match(/.{1,4}/g) ?? [];
 
@@ -205,7 +173,6 @@ function PaymentBlock({ amount, uploading, onUpload }: { amount: number; uploadi
         <span className="text-sm font-semibold">پرداخت کارت‌به‌کارت</span>
       </div>
 
-      {/* Iranian-style bank card */}
       <div className="relative mx-auto max-w-md">
         <div className="absolute -inset-1 bg-gradient-to-tr from-primary/40 via-accent/30 to-primary/40 blur-xl rounded-3xl" />
         <div
@@ -216,11 +183,9 @@ function PaymentBlock({ amount, uploading, onUpload }: { amount: number; uploadi
             boxShadow: "0 20px 60px -20px oklch(0.30 0.10 240 / 0.7), inset 0 1px 0 0 rgba(255,255,255,0.1)",
           }}
         >
-          {/* Decorative circles */}
           <div className="absolute -top-16 -right-16 size-48 rounded-full bg-white/5" />
           <div className="absolute -bottom-20 -left-20 size-56 rounded-full bg-white/[0.03]" />
 
-          {/* Chip */}
           <div className="flex items-center justify-between mb-8">
             <div className="w-12 h-9 rounded-md bg-gradient-to-br from-yellow-200 via-yellow-400 to-yellow-600 relative overflow-hidden">
               <div className="absolute inset-1 border border-yellow-700/30 rounded-sm grid grid-cols-3 grid-rows-3 gap-px p-px">
@@ -235,7 +200,6 @@ function PaymentBlock({ amount, uploading, onUpload }: { amount: number; uploadi
             </div>
           </div>
 
-          {/* Card number */}
           <div className="font-mono text-2xl tracking-[0.2em] text-center mb-6 select-all">
             {cardGroups.map((g, i) => (
               <span key={i} className="inline-block mx-1">{toFa(g)}</span>
@@ -254,42 +218,23 @@ function PaymentBlock({ amount, uploading, onUpload }: { amount: number; uploadi
           </div>
         </div>
 
-        {/* Copy actions */}
         <div className="grid grid-cols-2 gap-2 mt-3">
-          <button
-            type="button"
-            onClick={() => copy(BUSINESS.cardNumber, "شماره کارت")}
-            className="flex items-center justify-center gap-2 rounded-lg border border-border bg-secondary/60 hover:bg-secondary px-3 py-2.5 text-xs font-medium transition-colors"
-          >
+          <button type="button" onClick={() => copy(BUSINESS.cardNumber, "شماره کارت")}
+            className="flex items-center justify-center gap-2 rounded-lg border border-border bg-secondary/60 hover:bg-secondary px-3 py-2.5 text-xs font-medium transition-colors">
             <Copy className="size-3.5" /> کپی شماره کارت
           </button>
-          <button
-            type="button"
-            onClick={() => copy(String(amount), "مبلغ")}
-            className="flex items-center justify-center gap-2 rounded-lg btn-primary px-3 py-2.5 text-xs"
-          >
+          <button type="button" onClick={() => copy(String(amount), "مبلغ")}
+            className="flex items-center justify-center gap-2 rounded-lg btn-primary px-3 py-2.5 text-xs">
             <Copy className="size-3.5" /> کپی مبلغ
           </button>
         </div>
       </div>
 
-      {/* Amount + sheba */}
       <div className="mt-5 rounded-xl border border-border bg-background/60 p-4 space-y-3 text-sm">
-        <Detail
-          label="مبلغ قابل پرداخت"
-          value={formatToman(amount)}
-          highlight
-          onCopy={() => copy(String(amount), "مبلغ")}
-        />
-        <Detail
-          label="شماره شبا"
-          value={BUSINESS.sheba}
-          mono
-          onCopy={() => copy(BUSINESS.sheba, "شماره شبا")}
-        />
+        <Detail label="مبلغ قابل پرداخت" value={formatToman(amount)} highlight onCopy={() => copy(String(amount), "مبلغ")} />
+        <Detail label="شماره شبا" value={BUSINESS.sheba} mono onCopy={() => copy(BUSINESS.sheba, "شماره شبا")} />
       </div>
 
-      {/* Instructions */}
       <ol className="mt-5 space-y-2 text-xs text-muted-foreground list-none">
         {[
           "مبلغ دقیق سفارش را به شماره کارت بالا کارت‌به‌کارت کنید.",
@@ -308,7 +253,7 @@ function PaymentBlock({ amount, uploading, onUpload }: { amount: number; uploadi
           {uploading ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
           آپلود رسید پرداخت
           <input type="file" accept="image/*,application/pdf" className="hidden" disabled={uploading}
-            onChange={(e) => { const f = e.target.files?.[0]; if (f) onUpload(f); }} />
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) onUpload(f); e.target.value = ""; }} />
         </label>
       </div>
     </div>

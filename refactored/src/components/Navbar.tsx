@@ -1,14 +1,13 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Boxes, LogOut, Shield } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
-import { supabase } from "@/integrations/supabase/client";
 
 export function Navbar() {
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, signOut: doSignOut } = useAuth();
   const navigate = useNavigate();
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    await doSignOut();
     navigate({ to: "/" });
   };
 

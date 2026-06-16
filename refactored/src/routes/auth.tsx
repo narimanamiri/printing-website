@@ -1,9 +1,10 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Boxes } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
+import { signIn, signUp } from "@/lib/auth.functions";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({
@@ -17,6 +18,7 @@ export const Route = createFileRoute("/auth")({
 
 function AuthPage() {
   const navigate = useNavigate();
+  const qc = useQueryClient();
   const { user, loading } = useAuth();
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
@@ -34,23 +36,18 @@ function AuthPage() {
     setSubmitting(true);
     try {
       if (mode === "signup") {
-        const { error } = await supabase.auth.signUp({
-          email, password,
-          options: {
-            emailRedirectTo: `${window.location.origin}/quote`,
-            data: { full_name: fullName, phone },
-          },
-        });
-        if (error) throw error;
+        const res = await signUp({ data: { email, password, fullName, phone } });
+        qc.setQueryData(["me"], res.user);
         toast.success("حساب شما ساخته شد! خوش آمدید.");
       } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
+        const res = await signIn({ data: { email, password } });
+        qc.setQueryData(["me"], res.user);
         toast.success("خوش برگشتید.");
       }
+      await qc.invalidateQueries({ queryKey: ["me"] });
       navigate({ to: "/quote" });
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "ورود ناموفق بود");
+      toast.error(err instanceof Error ? err.message : "عملیات ناموفق بود");
     } finally {
       setSubmitting(false);
     }
@@ -99,6 +96,9 @@ function AuthPage() {
             {mode === "signup" ? "حساب کاربری دارید؟ وارد شوید" : "حساب کاربری ندارید؟ ثبت‌نام کنید"}
           </button>
         </div>
+        <p className="text-center text-[11px] text-muted-foreground mt-4">
+          اولین حسابی که ساخته شود، به‌صورت خودکار مدیر کارگاه خواهد بود.
+        </p>
       </div>
     </div>
   );

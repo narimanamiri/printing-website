@@ -1,36 +1,28 @@
-import { useEffect, useState } from "react";
-import type { Session, User } from "@supabase/supabase-js";
-import { supabase } from "@/integrations/supabase/client";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { me, signOut as signOutFn } from "@/lib/auth.functions";
+import type { PublicUser } from "@/lib/types";
 
+// Local, cookie-session auth. No external service — reads the current user from
+// the server `me` function and caches it via react-query.
 export function useAuth() {
-  const [session, setSession] = useState<Session | null>(null);
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const qc = useQueryClient();
+  const { data, isLoading } = useQuery<PublicUser | null>({
+    queryKey: ["me"],
+    queryFn: async () => (await me()).user,
+    staleTime: 60_000,
+    retry: false,
+  });
 
-  useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, s) => {
-      setSession(s);
-      setUser(s?.user ?? null);
-    });
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setUser(data.session?.user ?? null);
-      setLoading(false);
-    });
-    return () => subscription.unsubscribe();
-  }, []);
+  const user = data ?? null;
 
-  useEffect(() => {
-    if (!user) { setIsAdmin(false); return; }
-    supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", user.id)
-      .eq("role", "admin")
-      .maybeSingle()
-      .then(({ data }) => setIsAdmin(!!data));
-  }, [user]);
-
-  return { session, user, loading, isAdmin };
+  return {
+    user,
+    loading: isLoading,
+    isAdmin: user?.role === "admin",
+    refresh: () => qc.invalidateQueries({ queryKey: ["me"] }),
+    signOut: async () => {
+      await signOutFn();
+      qc.setQueryData(["me"], null);
+    },
+  };
 }
