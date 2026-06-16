@@ -5,6 +5,33 @@ import { requireAdmin } from "@/lib/server/session";
 import { toAdminOrderDTO } from "@/lib/server/map";
 import { readAsDataUrl } from "@/lib/server/files";
 
+const REVENUE_STATUSES = new Set(["confirmed", "printing", "completed"]);
+
+export const dashboardStats = createServerFn({ method: "GET" }).handler(async () => {
+  requireAdmin();
+  const d = db();
+  const byStatus = {
+    pending_payment: 0, awaiting_confirmation: 0, confirmed: 0,
+    printing: 0, completed: 0, cancelled: 0,
+  } as Record<string, number>;
+  let revenueToman = 0, todayOrders = 0;
+  const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+  const todayIso = todayStart.toISOString();
+  for (const o of d.orders) {
+    byStatus[o.status] = (byStatus[o.status] ?? 0) + 1;
+    if (REVENUE_STATUSES.has(o.status)) revenueToman += o.costToman;
+    if (o.createdAt >= todayIso) todayOrders++;
+  }
+  return {
+    totalOrders: d.orders.length,
+    todayOrders,
+    customers: d.users.filter((u) => u.role === "customer").length,
+    revenueToman,
+    awaitingConfirmation: byStatus.awaiting_confirmation,
+    byStatus,
+  };
+});
+
 export const listOrders = createServerFn({ method: "GET" })
   .inputValidator((d: unknown) =>
     z.object({ filter: z.string() }).parse(d ?? { filter: "all" }),

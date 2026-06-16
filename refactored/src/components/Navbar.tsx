@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Boxes, LogOut, Shield } from "lucide-react";
+import { Boxes, LogOut, Shield, User } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 
 export function Navbar() {
@@ -32,9 +32,14 @@ export function Navbar() {
 
         <div className="flex items-center gap-3">
           {user ? (
-            <button onClick={signOut} className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1.5 transition-colors">
-              <LogOut className="size-4" /> خروج
-            </button>
+            <>
+              <Link to="/profile" className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1.5 transition-colors" activeProps={{ className: "text-foreground" }}>
+                <User className="size-4" /> <span className="hidden sm:inline">{user.fullName || "حساب من"}</span>
+              </Link>
+              <button onClick={signOut} className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1.5 transition-colors">
+                <LogOut className="size-4" /> خروج
+              </button>
+            </>
           ) : (
             <Link to="/auth" className="text-sm font-medium px-4 py-2 rounded-lg btn-primary">
               ورود

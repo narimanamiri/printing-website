@@ -2,13 +2,13 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Loader2, Check, Hammer, PackageCheck, XCircle, Eye, Download, ShieldAlert, FileBox } from "lucide-react";
+import { Loader2, Check, Hammer, PackageCheck, XCircle, Eye, Download, ShieldAlert, FileBox, Wallet, Inbox, Users, CalendarDays } from "lucide-react";
 import { toast } from "sonner";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { useAuth } from "@/hooks/use-auth";
 import { formatToman, formatNumberFa, formatDurationFa } from "@/lib/stl-parser";
-import { listOrders, confirmOrderPayment, setOrderStatus, setAdminNotes, getOrderFile } from "@/lib/admin.functions";
+import { listOrders, dashboardStats, confirmOrderPayment, setOrderStatus, setAdminNotes, getOrderFile } from "@/lib/admin.functions";
 import type { AdminOrderDTO } from "@/lib/types";
 
 export const Route = createFileRoute("/admin")({
@@ -26,6 +26,7 @@ function AdminPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const listFn = useServerFn(listOrders);
+  const statsFn = useServerFn(dashboardStats);
   const confirmFn = useServerFn(confirmOrderPayment);
   const setStatusFn = useServerFn(setOrderStatus);
   const fileFn = useServerFn(getOrderFile);
@@ -40,6 +41,12 @@ function AdminPage() {
     queryKey: ["admin-orders", filter],
     enabled: !!user && isAdmin,
     queryFn: async () => (await listFn({ data: { filter } })).orders,
+  });
+
+  const { data: stats } = useQuery({
+    queryKey: ["admin-stats"],
+    enabled: !!user && isAdmin,
+    queryFn: async () => statsFn(),
   });
 
   if (loading) return null;
@@ -66,6 +73,7 @@ function AdminPage() {
       await confirmFn({ data: { orderId: id } });
       toast.success("پرداخت تأیید شد. فایل وارد صف چاپ شد.");
       qc.invalidateQueries({ queryKey: ["admin-orders"] });
+      qc.invalidateQueries({ queryKey: ["admin-stats"] });
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "خطا");
     }
@@ -76,6 +84,7 @@ function AdminPage() {
       await setStatusFn({ data: { orderId: id, status } });
       toast.success(`وضعیت: ${labels[status]}`);
       qc.invalidateQueries({ queryKey: ["admin-orders"] });
+      qc.invalidateQueries({ queryKey: ["admin-stats"] });
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "خطا");
     }
@@ -114,6 +123,15 @@ function AdminPage() {
           <div className="text-xs uppercase tracking-widest text-accent font-mono mb-2">مدیریت</div>
           <h1 className="text-4xl font-bold tracking-tight">صف چاپ</h1>
         </div>
+
+        {stats && (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            <StatCard icon={Wallet} label="درآمد (تأییدشده)" value={formatToman(stats.revenueToman)} accent />
+            <StatCard icon={Inbox} label="در انتظار تأیید" value={formatNumberFa(stats.awaitingConfirmation)} />
+            <StatCard icon={CalendarDays} label="سفارش‌های امروز" value={formatNumberFa(stats.todayOrders)} />
+            <StatCard icon={Users} label="مشتریان" value={formatNumberFa(stats.customers)} />
+          </div>
+        )}
 
         <div className="flex gap-2 mb-6 flex-wrap">
           {filters.map((f) => (
@@ -201,6 +219,17 @@ function AdminPage() {
         )}
       </main>
       <Footer />
+    </div>
+  );
+}
+
+function StatCard({ icon: Icon, label, value, accent }: { icon: typeof Wallet; label: string; value: string; accent?: boolean }) {
+  return (
+    <div className="surface rounded-2xl p-5">
+      <div className="flex items-center gap-2 text-[10px] uppercase tracking-wider text-muted-foreground font-mono">
+        <Icon className={`size-4 ${accent ? "text-accent" : "text-primary"}`} /> {label}
+      </div>
+      <div className={`mt-2 text-2xl font-bold ${accent ? "text-gradient" : ""}`}>{value}</div>
     </div>
   );
 }

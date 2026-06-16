@@ -148,6 +148,8 @@ function OrderCard({ order, highlighted, onChanged }: { order: OrderDTO; highlig
         </div>
       )}
 
+      <StatusTimeline status={order.status} />
+
       {order.notes && <p className="mt-4 text-xs text-muted-foreground border-r-2 border-border pr-3">{order.notes}</p>}
       {order.adminNotes && <p className="mt-3 text-xs text-primary border-r-2 border-primary pr-3">از کارگاه: {order.adminNotes}</p>}
 
@@ -160,6 +162,43 @@ function OrderCard({ order, highlighted, onChanged }: { order: OrderDTO; highlig
           رسید دریافت شد. پرداخت بررسی و فایل شما وارد صف چاپ خواهد شد.
         </div>
       )}
+    </div>
+  );
+}
+
+const TIMELINE = [
+  { key: "pending_payment", label: "پرداخت" },
+  { key: "awaiting_confirmation", label: "تأیید رسید" },
+  { key: "confirmed", label: "صف چاپ" },
+  { key: "printing", label: "چاپ" },
+  { key: "completed", label: "تحویل" },
+];
+
+function StatusTimeline({ status }: { status: string }) {
+  if (status === "cancelled") {
+    return (
+      <div className="mt-5 flex items-center gap-2 text-xs text-destructive bg-destructive/10 border border-destructive/30 rounded-lg px-3 py-2">
+        <XCircle className="size-4" /> این سفارش لغو شده است.
+      </div>
+    );
+  }
+  const current = TIMELINE.findIndex((s) => s.key === status);
+  return (
+    <div className="mt-6 flex items-center">
+      {TIMELINE.map((s, i) => {
+        const done = i <= current;
+        return (
+          <div key={s.key} className="flex-1 flex flex-col items-center relative">
+            {i > 0 && (
+              <span className={`absolute right-1/2 top-2 h-0.5 w-full ${i <= current ? "bg-primary" : "bg-border"}`} />
+            )}
+            <span className={`relative z-10 size-4 rounded-full border-2 ${done ? "bg-primary border-primary" : "bg-background border-border"}`}>
+              {i === current && <span className="absolute inset-0 rounded-full bg-primary animate-ping opacity-60" />}
+            </span>
+            <span className={`mt-1.5 text-[10px] font-mono ${done ? "text-foreground" : "text-muted-foreground"}`}>{s.label}</span>
+          </div>
+        );
+      })}
     </div>
   );
 }

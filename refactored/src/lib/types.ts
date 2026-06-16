@@ -60,3 +60,12 @@ export interface AdminOrderDTO extends OrderDTO {
   customerPhone: string;
   hasFile: boolean;
 }
+
+export interface DashboardStats {
+  totalOrders: number;
+  todayOrders: number;
+  customers: number;
+  revenueToman: number; // from confirmed/printing/completed orders
+  awaitingConfirmation: number; // orders needing the admin's attention
+  byStatus: Record<OrderStatus, number>;
+}
