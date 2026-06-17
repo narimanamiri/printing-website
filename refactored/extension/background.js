@@ -2,7 +2,7 @@
    - Fetches model STL files (host_permissions bypass page CORS).
    - Estimates price with the bundled slicer.
    - Hands a model off to the VoxelForge site (stored, then opened). */
-importScripts("slicer.js");
+importScripts("slicer.js", "parse3mf.js");
 
 const DEFAULTS = {
   siteUrl: "http://localhost:8088",
@@ -17,12 +17,28 @@ async function getSettings() {
   return { ...DEFAULTS, ...s };
 }
 
-async function fetchStl(url) {
+async function fetchBytes(url) {
   const res = await fetch(url, { credentials: "include" });
   if (!res.ok) throw new Error("دانلود فایل ناموفق بود (" + res.status + ")");
   const buf = await res.arrayBuffer();
   if (buf.byteLength < 84) throw new Error("فایل خیلی کوچک/نامعتبر است.");
   return buf;
+}
+
+// Load a model from a URL, supporting both STL and 3MF. Returns the mesh
+// positions plus an STL ArrayBuffer suitable for handing to the site.
+async function loadModel(url, filename) {
+  const buf = await fetchBytes(url);
+  const bytes = new Uint8Array(buf);
+  const isZip = bytes[0] === 0x50 && bytes[1] === 0x4b; // "PK"
+  const is3mf = isZip || /\.3mf(\?|#|$)/i.test(url) || /\.3mf$/i.test(filename || "");
+  if (is3mf) {
+    const positions = await self.VF3MF.parse(buf);
+    return { positions, stlBuffer: self.VFSlicer.positionsToStl(positions), isStl: false };
+  }
+  const positions = self.VFSlicer.parsePositions(buf);
+  if (!positions || positions.length === 0) throw new Error("فایل STL خوانده نشد.");
+  return { positions, stlBuffer: buf, isStl: true };
 }
 
 function bufToBase64(buf) {
@@ -67,8 +83,8 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     try {
       const settings = await getSettings();
       if (msg.type === "estimate") {
-        const buf = await fetchStl(msg.url);
-        const stats = self.VFSlicer.parse(buf);
+        const model = await loadModel(msg.url, msg.filename);
+        const stats = self.VFSlicer.statsFromGeometry(model.positions);
         const est = self.VFSlicer.estimate(stats, {
           material: msg.material || settings.material,
           quality: msg.quality || settings.quality,
@@ -77,11 +93,15 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         });
         sendResponse({ ok: true, stats, est });
       } else if (msg.type === "order") {
-        const buf = await fetchStl(msg.url);
-        const base64 = bufToBase64(buf);
+        const model = await loadModel(msg.url, msg.filename);
+        // Hand off as STL (3MF is converted) so the site loads it like an upload.
+        let name = msg.filename || "model.stl";
+        if (!model.isStl) name = name.replace(/\.3mf$/i, "") + ".stl";
+        if (!/\.stl$/i.test(name)) name += ".stl";
+        const base64 = bufToBase64(model.stlBuffer);
         await chrome.storage.local.set({
           vf_pending_import: {
-            filename: msg.filename || "model.stl",
+            filename: name,
             base64,
             material: msg.material || settings.material,
             quality: msg.quality || settings.quality,

@@ -7,16 +7,16 @@
 
   var V = window.VFSlicer;
 
-  // ---- find candidate STL urls on the page -------------------------------
+  // ---- find candidate model (STL/3MF) urls on the page -------------------
   function findStlUrls() {
     var set = new Set();
     document.querySelectorAll("a[href]").forEach(function (a) {
       var h = a.href || "";
-      if (/\.stl(\?|#|$)/i.test(h)) set.add(h);
+      if (/\.(stl|3mf)(\?|#|$)/i.test(h)) set.add(h);
     });
-    // also scan raw HTML for .stl urls (lazy/JSON-embedded links)
+    // also scan raw HTML for model urls (lazy/JSON-embedded links)
     try {
-      var re = /https?:\/\/[^\s"'<>]+\.stl(\?[^\s"'<>]*)?/gi, m;
+      var re = /https?:\/\/[^\s"'<>]+\.(stl|3mf)(\?[^\s"'<>]*)?/gi, m;
       var html = document.documentElement.innerHTML;
       while ((m = re.exec(html)) !== null) set.add(m[0]);
     } catch (e) {}
@@ -71,11 +71,11 @@
       '<button class="vf-x" title="بستن">×</button></div>' +
       '<div class="vf-body">' +
       (urls.length
-        ? '<label class="vf-l">فایل STL یافته‌شده (' + V.formatFa(urls.length) + ')</label>' +
+        ? '<label class="vf-l">فایل STL/3MF یافته‌شده (' + V.formatFa(urls.length) + ')</label>' +
           '<select class="vf-url">' + urlOptions + "</select>"
-        : '<div class="vf-note">روی این صفحه فایل STL مستقیم پیدا نشد. لینک فایل STL را بچسبانید یا سایت را باز کنید.</div>') +
-      '<label class="vf-l">یا لینک STL</label>' +
-      '<input class="vf-manual" type="text" placeholder="https://…/model.stl" />' +
+        : '<div class="vf-note">روی این صفحه فایل مستقیم پیدا نشد. لینک STL یا 3MF را بچسبانید یا سایت را باز کنید.</div>') +
+      '<label class="vf-l">یا لینک STL/3MF</label>' +
+      '<input class="vf-manual" type="text" placeholder="https://…/model.stl یا .3mf" />' +
       '<div class="vf-row">' +
       '<div><label class="vf-l">متریال</label><select class="vf-mat">' + materialOptions(settings.material) + "</select></div>" +
       '<div><label class="vf-l">اینفیل: <span class="vf-iv">' + V.formatFa(settings.infill) + "٪</span></label>" +

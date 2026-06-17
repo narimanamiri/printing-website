@@ -129,11 +129,39 @@
     };
   }
 
+  // Write a binary STL from a flat positions array (9 floats / triangle). Used
+  // to hand a parsed 3MF mesh to the site as a normal STL upload.
+  function positionsToStl(pos) {
+    var triCount = Math.floor(pos.length / 9);
+    var buf = new ArrayBuffer(84 + triCount * 50);
+    var dv = new DataView(buf);
+    dv.setUint32(80, triCount, true);
+    var off = 84;
+    for (var i = 0; i < triCount * 9; i += 9) {
+      var ax = pos[i], ay = pos[i + 1], az = pos[i + 2];
+      var bx = pos[i + 3], by = pos[i + 4], bz = pos[i + 5];
+      var cx = pos[i + 6], cy = pos[i + 7], cz = pos[i + 8];
+      var nx = (by - ay) * (cz - az) - (bz - az) * (cy - ay);
+      var ny = (bz - az) * (cx - ax) - (bx - ax) * (cz - az);
+      var nz = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
+      var nl = Math.hypot(nx, ny, nz) || 1;
+      dv.setFloat32(off, nx / nl, true); dv.setFloat32(off + 4, ny / nl, true); dv.setFloat32(off + 8, nz / nl, true);
+      off += 12;
+      var v = [ax, ay, az, bx, by, bz, cx, cy, cz];
+      for (var k = 0; k < 9; k++) { dv.setFloat32(off, v[k], true); off += 4; }
+      off += 2;
+    }
+    return buf;
+  }
+
   function formatToman(n) { return new Intl.NumberFormat("fa-IR").format(Math.round(n)) + " تومان"; }
   function formatFa(n, d) { return new Intl.NumberFormat("fa-IR", { minimumFractionDigits: d || 0, maximumFractionDigits: d || 0 }).format(n); }
 
   root.VFSlicer = {
     parse: parse,
+    parsePositions: parsePositions,
+    statsFromGeometry: statsFromGeometry,
+    positionsToStl: positionsToStl,
     estimate: estimate,
     MATERIALS: MATERIALS,
     QUALITY_PRESETS: QUALITY_PRESETS,
