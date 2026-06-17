@@ -1,0 +1,37 @@
+{
+  "manifest_version": 3,
+  "name": "وُکسِل‌فورج — تخمین قیمت چاپ سه‌بعدی",
+  "short_name": "VoxelForge",
+  "description": "روی MakerWorld، Thingiverse و Printables قیمت چاپ سه‌بعدی را تخمین بزن و با یک کلیک در وُکسِل‌فورج سفارش بده.",
+  "version": "1.0.0",
+  "permissions": ["storage", "unlimitedStorage", "tabs", "scripting"],
+  "host_permissions": [
+    "*://*.makerworld.com/*",
+    "*://*.thingiverse.com/*",
+    "*://*.printables.com/*",
+    "<all_urls>"
+  ],
+  "background": { "service_worker": "background.js" },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "وُکسِل‌فورج",
+    "default_icon": { "16": "icons/icon16.png", "48": "icons/icon48.png", "128": "icons/icon128.png" }
+  },
+  "icons": { "16": "icons/icon16.png", "48": "icons/icon48.png", "128": "icons/icon128.png" },
+  "content_scripts": [
+    {
+      "matches": ["*://*.makerworld.com/*", "*://*.thingiverse.com/*", "*://*.printables.com/*"],
+      "js": ["slicer.js", "content-maker.js"],
+      "css": ["content-maker.css"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["*://localhost/*", "*://127.0.0.1/*"],
+      "js": ["content-bridge.js"],
+      "run_at": "document_start"
+    }
+  ],
+  "web_accessible_resources": [
+    { "resources": ["icons/*.png"], "matches": ["<all_urls>"] }
+  ]
+}

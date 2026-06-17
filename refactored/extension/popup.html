@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="popup.css" />
+    <title>وُکسِل‌فورج</title>
+  </head>
+  <body>
+    <div class="head">
+      <div class="logo">◈ وُکسِل‌فورج</div>
+      <div class="tag">تخمین قیمت چاپ سه‌بعدی روی هر سایت مدل</div>
+    </div>
+
+    <div class="steps">
+      <div class="step"><b>۱</b> به MakerWorld، Thingiverse یا Printables بروید.</div>
+      <div class="step"><b>۲</b> روی دکمه‌ی شناور «◈ قیمت چاپ» بزنید.</div>
+      <div class="step"><b>۳</b> قیمت تخمینی را ببینید و «سفارش در وُکسِل‌فورج» را بزنید.</div>
+    </div>
+
+    <div class="card">
+      <label class="l">آدرس سایت وُکسِل‌فورج</label>
+      <input id="siteUrl" type="text" dir="ltr" placeholder="http://localhost:8088" />
+
+      <div class="row">
+        <div>
+          <label class="l">متریال پیش‌فرض</label>
+          <select id="material">
+            <option>PLA</option><option>PETG</option><option>ABS</option><option>TPU</option><option>Resin</option>
+          </select>
+        </div>
+        <div>
+          <label class="l">کیفیت</label>
+          <select id="quality">
+            <option value="draft">پیش‌نویس</option>
+            <option value="standard" selected>استاندارد</option>
+            <option value="fine">دقیق</option>
+          </select>
+        </div>
+      </div>
+
+      <label class="l">اینفیل پیش‌فرض: <span id="iv">۲۰٪</span></label>
+      <input id="infill" type="range" min="10" max="100" step="5" value="20" />
+
+      <label class="l">قیمت هر گرم (تومان)</label>
+      <input id="pricePerGram" type="number" dir="ltr" value="30000" />
+
+      <button id="save">ذخیره تنظیمات</button>
+      <div id="msg" class="msg" hidden>ذخیره شد ✓</div>
+    </div>
+
+    <button id="open" class="open">باز کردن سایت وُکسِل‌فورج</button>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useQueryClient } from "@tanstack/react-query";
 import { Upload, FileBox, Loader2, Check, ArrowLeft, AlertCircle, ChevronDown, Clock, Ruler, Layers3, Box, RotateCcw } from "lucide-react";
@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { StlViewer } from "@/components/StlViewer";
+import { ExtensionBanner } from "@/components/ExtensionBanner";
 import { useAuth } from "@/hooks/use-auth";
 import { useSettings } from "@/hooks/use-settings";
 import {
@@ -105,6 +106,30 @@ function QuotePage() {
   const rotate = (axis: "x" | "y" | "z") => setRot((r) => ({ ...r, [axis]: (r[axis] + 90) % 360 }));
   const resetOrient = () => { setRot({ x: 0, y: 0, z: 0 }); setScalePercent(100); };
 
+  // Receive an STL handed off by the Chrome extension (from MakerWorld etc.).
+  useEffect(() => {
+    const onMsg = (e: MessageEvent) => {
+      if (e.source !== window) return;
+      const d = e.data;
+      if (!d || d.source !== "voxelforge-ext" || d.type !== "import-stl") return;
+      try {
+        const bin = atob(d.base64);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        const f = new File([bytes], d.filename || "model.stl", { type: "model/stl" });
+        if (d.material && (d.material in MATERIALS)) setMaterial(d.material as MaterialKey);
+        if (typeof d.infill === "number") setInfill(d.infill);
+        if (typeof d.quality === "string") setQualityKey(d.quality);
+        toast.success("مدل از افزونه دریافت شد.");
+        void handleFile(f);
+      } catch {
+        toast.error("دریافت مدل از افزونه ناموفق بود.");
+      }
+    };
+    window.addEventListener("message", onMsg);
+    return () => window.removeEventListener("message", onMsg);
+  }, []);
+
   const submitOrder = async () => {
     if (!user) { navigate({ to: "/auth" }); return; }
     if (!file || !stats || !est) return;
@@ -142,6 +167,7 @@ function QuotePage() {
     <div className="min-h-screen flex flex-col">
       <Navbar />
       <main className="flex-1 max-w-6xl mx-auto px-6 py-12 w-full">
+        <ExtensionBanner />
         <div className="mb-10">
           <div className="text-xs uppercase tracking-widest text-primary font-mono mb-2">گام ۱ از ۲</div>
           <h1 className="text-4xl font-bold tracking-tight">قیمت واقعی خود را دریافت کنید</h1>

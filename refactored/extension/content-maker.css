@@ -1,0 +1,42 @@
+/* VoxelForge injected widget — scoped, dark neon, RTL */
+.vf-launcher {
+  position: fixed; bottom: 20px; right: 20px; z-index: 2147483646;
+  font-family: Vazirmatn, system-ui, sans-serif; font-size: 13px; font-weight: 700;
+  color: #08222a; background: linear-gradient(135deg, #5ee9d6, #b6f24a);
+  border: none; border-radius: 999px; padding: 10px 16px; cursor: pointer;
+  box-shadow: 0 8px 24px -6px rgba(94, 233, 214, 0.6); direction: rtl;
+}
+.vf-launcher:hover { filter: brightness(1.06); transform: translateY(-1px); }
+
+.vf-panel {
+  position: fixed; bottom: 72px; right: 20px; z-index: 2147483647; width: 320px;
+  font-family: Vazirmatn, system-ui, sans-serif; direction: rtl; color: #eaf2f3;
+  background: linear-gradient(180deg, #14222a, #0e171d);
+  border: 1px solid #244049; border-radius: 16px; overflow: hidden;
+  box-shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.7);
+}
+.vf-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid #1d333c; }
+.vf-logo { font-weight: 800; background: linear-gradient(135deg, #5ee9d6, #b6f24a); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.vf-x { background: none; border: none; color: #9fb2b8; font-size: 20px; cursor: pointer; line-height: 1; }
+.vf-x:hover { color: #fff; }
+.vf-body { padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+.vf-l { font-size: 11px; color: #9fb2b8; }
+.vf-note { font-size: 12px; color: #9fb2b8; background: #18272f; border: 1px solid #244049; border-radius: 8px; padding: 8px; }
+.vf-panel select, .vf-panel input[type="text"] {
+  width: 100%; box-sizing: border-box; background: #0c1419; color: #eaf2f3;
+  border: 1px solid #244049; border-radius: 8px; padding: 7px 9px; font-family: inherit; font-size: 13px;
+}
+.vf-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.vf-panel input[type="range"] { width: 100%; accent-color: #5ee9d6; margin-top: 6px; }
+.vf-estimate, .vf-order, .vf-open {
+  border: none; border-radius: 9px; padding: 9px; font-family: inherit; font-weight: 700; cursor: pointer; font-size: 13px;
+}
+.vf-estimate, .vf-order { color: #08222a; background: linear-gradient(135deg, #5ee9d6, #b6f24a); }
+.vf-order:disabled { opacity: 0.6; cursor: default; }
+.vf-open { background: transparent; color: #9fb2b8; border: 1px solid #244049; }
+.vf-open:hover { color: #fff; }
+.vf-result { background: #0c1419; border: 1px solid #244049; border-radius: 10px; padding: 10px; text-align: center; font-size: 12px; }
+.vf-result.vf-err { color: #ff9a8a; border-color: #5a2a2a; }
+.vf-price { font-size: 20px; font-weight: 800; background: linear-gradient(135deg, #5ee9d6, #b6f24a); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.vf-sub { color: #9fb2b8; margin-top: 4px; }
+.vf-warn { color: #f1c453; margin-top: 6px; }
